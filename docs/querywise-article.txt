@@ -1,0 +1,133 @@
+Semantic Is All You Need: Why LLMs Fail at Enterprise SQL (And How a Metadata Layer Fixes It)
+==============================================================================================
+
+Everyone's building text-to-SQL. Almost everyone's getting it wrong.
+
+The demo always works. You point GPT-4 or Claude at a toy database with 5 tables, ask "show me top customers by revenue," and it writes perfect SQL. Ship it. Done. Next slide.
+
+Then you connect it to a real enterprise database.
+
+400 tables. Cryptic column names like `cust_seg_cd` and `trx_amt_adj_dt`. A column called `status` that exists in 23 different tables. Business logic that says "active customer" actually means "placed an order in the last 90 days AND hasn't been flagged in the compliance table AND has segment_code != 'X'."
+
+The LLM hallucinates a JOIN that doesn't exist. Picks the wrong `status` column. Doesn't know that `segment A` means Enterprise and `segment C` means SMB. Returns a query that runs perfectly — and gives completely wrong numbers.
+
+Sound familiar?
+
+
+The Problem Nobody Talks About
+-------------------------------
+
+The text-to-SQL space is obsessed with prompt engineering and model selection. "Use chain-of-thought." "Fine-tune on your schema." "Try a bigger model."
+
+None of that matters if the LLM doesn't understand your business context.
+
+Here's the uncomfortable truth: the gap between a demo and production text-to-SQL isn't the model. It's the metadata. An LLM can write SQL syntax flawlessly. What it can't do is understand that your company calls net revenue "bookings," that customer segments are encoded as single letters, or that the `orders` table needs to be joined through `order_items` to get to `products`.
+
+This is a context problem, not an intelligence problem.
+
+
+What If You Gave the LLM a Data Analyst's Brain?
+-------------------------------------------------
+
+Think about what a good data analyst does when they write a query against an unfamiliar database:
+
+1. They look at the schema — but not ALL of it. Just the relevant tables.
+2. They check how tables relate to each other (foreign keys, join paths).
+3. They ask: "What does this column actually mean? What do these coded values represent?"
+4. They look at similar queries that worked before.
+5. THEN they write SQL.
+
+Nobody does step 1-4 for LLMs. Everyone jumps straight to "here's the full schema, write SQL." That's like handing a new analyst a 200-page data dictionary and saying "figure it out" with no context about what the business actually cares about.
+
+
+The Semantic Layer Approach
+---------------------------
+
+I built QueryWise around a simple thesis: if you give an LLM the same context a senior data analyst would have, it writes senior-analyst-quality SQL.
+
+The architecture has three components that work together:
+
+BUSINESS GLOSSARY — Maps business terms to SQL expressions. When someone asks about "non-performing loans," the system knows that means Stage 3 exposures. When someone says "ECL," it knows which column, which aggregation, which exclusions.
+
+METRIC DEFINITIONS — Named calculations with their SQL, aggregation type, and dimensions. "Coverage Ratio" isn't ambiguous anymore — it's SUM(ecl_provisions.ecl_lifetime) / SUM(exposures.ead), broken down by stage and facility type.
+
+DATA DICTIONARY — Column value mappings. The LLM knows that stage=1 means Performing, stage=2 means SICR, facility_type='corporate_loan' means Corporate Loan. No more guessing.
+
+But here's the key insight: you don't dump all of this into the prompt. That would blow up your context window and confuse the model. You need intelligent retrieval.
+
+
+Hybrid Context Selection (The Actual Innovation)
+-------------------------------------------------
+
+For every natural language question, QueryWise runs a context selection pipeline that combines three strategies:
+
+1. EMBEDDING SIMILARITY (50% weight) — The question and every table/column/glossary term in your database have vector embeddings. Cosine similarity finds semantically related schema elements. "What's the total expected credit loss?" surfaces the `ecl_provisions` and `exposures` tables even though those exact names never appear in the question.
+
+2. KEYWORD MATCHING (30% weight) — Sometimes users say exact table or column names. "Show me the refunds table" should find `refunds` with 100% confidence, not rely on embedding similarity. Exact match = 1.0, partial = 0.7, substring = 0.5.
+
+3. FOREIGN KEY GRAPH TRAVERSAL (20% weight) — If the top-scoring tables need a JOIN table to connect them, the system walks the FK graph to include it. You asked about counterparties and their ECL provisions? The system automatically pulls in `facilities` and `exposures` as the bridge.
+
+Final score: 0.5 * embedding + 0.3 * keyword + 0.2 * fk_proximity + glossary_boost
+
+The top 8 tables (with all their columns, relationships, and metadata) get assembled into a structured prompt. Not 400 tables. Not 8,000 columns. Just the 8 most relevant tables with full business context.
+
+The result: the LLM operates with laser focus on exactly the right slice of your database, enriched with exactly the business knowledge it needs.
+
+
+Multi-Agent LLM Orchestration
+------------------------------
+
+The SQL generation itself uses four specialized agents, not one monolithic prompt:
+
+- QUERY COMPOSER — Takes the enriched context + question, outputs SQL + explanation + confidence score.
+- SQL VALIDATOR — Static analysis (blocks DROP, DELETE, injection patterns) + schema validation (do these tables/columns actually exist?).
+- ERROR HANDLER — If validation or execution fails, this agent sees the error + previous attempt and generates a corrected query. Up to 3 retries per phase.
+- RESULT INTERPRETER — Takes the raw query results and generates a natural language summary with key insights and follow-up suggestions.
+
+Simple questions (single-table lookups) route to a smaller, faster model. Complex queries (window functions, CTEs, multi-table aggregations) route to a more capable one. Temperature is always 0.0 — we want deterministic, not creative.
+
+
+Security That's Not an Afterthought
+------------------------------------
+
+Every query runs inside a read-only transaction at the database level. Not application-level checks — actual PostgreSQL READ ONLY mode. Even if the LLM somehow generates a DELETE statement that passes the regex blocklist, the database itself rejects it.
+
+Connection strings are encrypted at rest with Fernet (AES-128). They never appear in API responses — the frontend only sees "has_connection_string: true/false."
+
+Statement timeouts and row limits are enforced per-connection. No runaway queries. No accidentally returning 10 million rows.
+
+
+The Stack (For the Engineers)
+-----------------------------
+
+Backend: Python 3.12, FastAPI, SQLAlchemy 2.0 (async), asyncpg, pgvector, Alembic
+Frontend: React 19, TypeScript 5.9, Vite, Mantine UI, TanStack React Query
+Database: PostgreSQL 16 with pgvector extension
+LLM: Provider-agnostic — Anthropic Claude, OpenAI, Ollama (plug in any provider)
+Infrastructure: Docker Compose, 4 services, one command to run
+
+The entire semantic layer — context builder, schema linker, relevance scorer, glossary resolver, prompt assembler — is about 800 lines of Python. That's it. The metadata layer that makes LLMs actually useful against enterprise databases isn't a massive infrastructure project. It's a focused, well-designed retrieval system.
+
+
+Why This Matters Now
+--------------------
+
+Every enterprise is trying to make their data accessible to non-technical users. The pitch is always the same: "Just ask questions in English." But the implementations keep failing because they treat text-to-SQL as a model problem instead of a context problem.
+
+You don't need a better model. You need better context.
+
+A business glossary that maps your terminology to SQL. A data dictionary that explains your coded values. A scoring system that retrieves the right 8 tables out of 400. And agents that validate, retry, and explain — not just generate.
+
+Semantic is all you need.
+
+---
+
+QueryWise is open-source. The repo is structured as a full production application — not a notebook, not a demo. Docker Compose up and you're running.
+
+If you're building text-to-SQL for your organization and hitting the "works on demos, fails on real data" wall, the semantic layer approach might be what you're missing.
+
+GitHub: [link in comments]
+C̶l̶a̶u̶d̶e̶ 
+Cosmin Chauciuc
+
+#TextToSQL #LLM #DataEngineering #NLP #SemanticLayer #RAG #PostgreSQL #Python #OpenSource

@@ -1,0 +1,50 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    # Application
+    app_name: str = "QueryWise"
+    environment: str = "development"
+    debug: bool = False
+    api_prefix: str = "/api/v1"
+
+    # App database (stores metadata, glossary, etc.)
+    database_url: str = "postgresql+asyncpg://querywise:querywise_dev@localhost:5432/querywise"
+
+    # Security
+    encryption_key: str = "dev-encryption-key-change-in-production"
+    cors_origins: list[str] = ["http://localhost:5173"]
+
+    # Query defaults
+    default_query_timeout_seconds: int = 30
+    default_max_rows: int = 1000
+    max_retry_attempts: int = 3
+
+    # LLM defaults
+    default_llm_provider: str = "anthropic"
+    default_llm_model: str = "claude-sonnet-4-20250514"
+    embedding_model: str = "text-embedding-3-small"
+
+    # Ollama settings (used when default_llm_provider = "ollama")
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.1:8b"
+    ollama_embedding_model: str = "nomic-embed-text"
+
+    # Rate limiting
+    max_queries_per_minute: int = 30
+
+    # Context builder
+    max_context_tables: int = 8
+    max_sample_queries: int = 3
+    embedding_dimension: int = 1536
+
+    # Auto-setup sample database on startup
+    auto_setup_sample_db: bool = True
+    sample_db_connection_string: str = (
+        "postgresql://sample:sample_dev@sample-db:5432/sampledb"
+    )
+
+
+settings = Settings()

@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QueryWise — Platform Architecture</title>
+<style>
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: #1e293b;
+  background: #f8fafc;
+  line-height: 1.6;
+}
+code, pre, .mono { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace; }
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 260px;
+  background: #0f172a; color: #94a3b8; padding: 24px 0;
+  overflow-y: auto; z-index: 100;
+  border-right: 1px solid #1e293b;
+}
+.sidebar-brand {
+  padding: 0 20px 20px; border-bottom: 1px solid #1e293b; margin-bottom: 12px;
+}
+.sidebar-brand h1 { font-size: 16px; color: #f1f5f9; font-weight: 700; letter-spacing: -0.3px; }
+.sidebar-brand p { font-size: 11px; color: #64748b; margin-top: 4px; }
+.sidebar nav a {
+  display: block; padding: 7px 20px; font-size: 13px; color: #94a3b8;
+  text-decoration: none; transition: all 0.15s;
+  border-left: 3px solid transparent;
+}
+.sidebar nav a:hover { color: #e2e8f0; background: #1e293b; }
+.sidebar nav a.active { color: #818cf8; border-left-color: #818cf8; background: rgba(129,140,248,0.08); }
+.sidebar nav .sep {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px;
+  color: #475569; padding: 16px 20px 6px; font-weight: 600;
+}
+
+/* ===== MAIN ===== */
+.main { margin-left: 260px; padding: 40px 48px 80px; max-width: 1100px; }
+
+/* ===== HERO ===== */
+.hero { margin-bottom: 48px; }
+.hero h1 { font-size: 32px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; }
+.hero p { font-size: 17px; color: #475569; margin-top: 8px; max-width: 660px; }
+.hero .badges { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.badge {
+  display: inline-block; font-size: 11px; font-weight: 600; padding: 4px 10px;
+  border-radius: 999px; letter-spacing: 0.3px;
+}
+.badge-purple { background: #ede9fe; color: #6d28d9; }
+.badge-blue { background: #dbeafe; color: #1d4ed8; }
+.badge-green { background: #dcfce7; color: #15803d; }
+.badge-amber { background: #fef3c7; color: #b45309; }
+.badge-slate { background: #e2e8f0; color: #334155; }
+
+/* ===== SECTION ===== */
+section { margin-bottom: 56px; }
+section > h2 {
+  font-size: 22px; font-weight: 700; color: #0f172a;
+  border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 20px;
+}
+h3 { font-size: 17px; font-weight: 700; color: #1e293b; margin: 28px 0 12px; }
+h4 { font-size: 14px; font-weight: 700; color: #334155; margin: 20px 0 8px; }
+p { margin-bottom: 12px; color: #334155; font-size: 14.5px; }
+
+/* ===== CARDS ===== */
+.card-grid { display: grid; gap: 16px; }
+.card-grid-2 { grid-template-columns: 1fr 1fr; }
+.card-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+.card-grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+.card {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  padding: 20px; transition: box-shadow 0.15s, border-color 0.15s;
+}
+.card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); border-color: #cbd5e1; }
+.card h4 { margin-top: 0; font-size: 14px; }
+.card p { font-size: 13px; color: #64748b; margin-bottom: 0; }
+.card .tag { font-size: 11px; font-weight: 600; color: #818cf8; margin-bottom: 6px; display: block; }
+.card-accent { border-left: 3px solid #818cf8; }
+.card ul { margin: 8px 0 0 18px; font-size: 13px; color: #475569; }
+.card ul li { margin-bottom: 4px; }
+
+/* ===== DIAGRAM BOXES ===== */
+.arch-diagram {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+  padding: 32px; margin: 20px 0;
+}
+.layer-stack { display: flex; flex-direction: column; gap: 2px; }
+.layer {
+  border-radius: 8px; padding: 16px 20px; text-align: center;
+  font-size: 14px; font-weight: 600; position: relative;
+}
+.layer-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7; display: block; margin-bottom: 4px; }
+.layer-purple { background: #ede9fe; color: #5b21b6; border: 1px solid #c4b5fd; }
+.layer-blue { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+.layer-indigo { background: #e0e7ff; color: #3730a3; border: 1px solid #a5b4fc; }
+.layer-teal { background: #ccfbf1; color: #0f766e; border: 1px solid #5eead4; }
+.layer-green { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+.layer-amber { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+.layer-slate { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+.arrow-down {
+  width: 2px; height: 20px; background: #94a3b8; margin: 0 auto;
+  position: relative;
+}
+.arrow-down::after {
+  content: ''; position: absolute; bottom: -4px; left: -4px;
+  border-left: 5px solid transparent; border-right: 5px solid transparent;
+  border-top: 6px solid #94a3b8;
+}
+.sub-layers { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 8px 0; }
+
+/* ===== FLOW DIAGRAM ===== */
+.flow { display: flex; flex-direction: column; align-items: center; gap: 0; margin: 20px 0; }
+.flow-step {
+  background: #fff; border: 2px solid #c7d2fe; border-radius: 10px;
+  padding: 14px 24px; width: 100%; max-width: 600px;
+  font-size: 14px; position: relative;
+}
+.flow-step .step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: #4f46e5; color: #fff; font-size: 12px; font-weight: 700;
+  margin-right: 10px; flex-shrink: 0;
+}
+.flow-step .step-title { font-weight: 700; color: #1e293b; }
+.flow-step .step-desc { font-size: 12.5px; color: #64748b; margin-top: 4px; }
+.flow-step.step-error { border-color: #fbbf24; background: #fffbeb; }
+.flow-step.step-success { border-color: #86efac; background: #f0fdf4; }
+.flow-arrow { width: 2px; height: 24px; background: #a5b4fc; position: relative; }
+.flow-arrow::after {
+  content: ''; position: absolute; bottom: -4px; left: -4px;
+  border-left: 5px solid transparent; border-right: 5px solid transparent;
+  border-top: 6px solid #a5b4fc;
+}
+.flow-branch {
+  display: flex; align-items: center; gap: 12px; width: 100%; max-width: 600px;
+  font-size: 12px; color: #b45309; font-weight: 600;
+}
+.flow-branch::before, .flow-branch::after {
+  content: ''; flex: 1; height: 1px; background: #fbbf24;
+}
+
+/* ===== TABLES ===== */
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13.5px; }
+thead th {
+  background: #f1f5f9; color: #334155; font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 10px 14px; text-align: left; border-bottom: 2px solid #e2e8f0;
+}
+tbody td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; color: #475569; }
+tbody tr:hover { background: #f8fafc; }
+.col-method { font-weight: 700; font-size: 12px; }
+.col-method.get { color: #15803d; }
+.col-method.post { color: #1d4ed8; }
+.col-method.put { color: #b45309; }
+.col-method.patch { color: #7c3aed; }
+.col-method.delete { color: #dc2626; }
+
+/* ===== CODE ===== */
+pre {
+  background: #1e1e2e; color: #cdd6f4; padding: 16px 20px;
+  border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.5;
+  margin: 12px 0;
+}
+code {
+  background: #f1f5f9; color: #6d28d9; padding: 2px 6px; border-radius: 4px;
+  font-size: 12.5px;
+}
+pre code { background: none; color: inherit; padding: 0; }
+.kw { color: #cba6f7; } /* keyword */
+.str { color: #a6e3a1; } /* string */
+.num { color: #fab387; } /* number */
+.cmt { color: #6c7086; font-style: italic; } /* comment */
+.fn { color: #89b4fa; } /* function */
+
+/* ===== ER DIAGRAM ===== */
+.er-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+.er-table {
+  background: #fff; border: 2px solid #c7d2fe; border-radius: 8px; overflow: hidden;
+}
+.er-table-head {
+  background: #4f46e5; color: #fff; padding: 8px 14px; font-size: 13px; font-weight: 700;
+}
+.er-table-head .vec { float: right; background: rgba(255,255,255,0.2); padding: 1px 8px; border-radius: 4px; font-size: 10px; }
+.er-col { padding: 5px 14px; font-size: 12.5px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; }
+.er-col .type { color: #818cf8; font-family: monospace; font-size: 11px; }
+.er-col .pk { color: #f59e0b; font-weight: 700; }
+.er-col .fk { color: #14b8a6; font-size: 10px; }
+
+/* ===== SECURITY ===== */
+.security-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin: 16px 0; }
+.sec-card {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;
+  border-top: 3px solid #10b981;
+}
+.sec-card h4 { margin: 0 0 6px; font-size: 13px; }
+.sec-card p { font-size: 12.5px; color: #64748b; margin: 0; }
+.sec-card .icon { font-size: 22px; margin-bottom: 8px; display: block; }
+
+/* ===== DEPLOY ===== */
+.deploy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 16px 0; }
+.deploy-svc {
+  background: #fff; border: 2px solid #e2e8f0; border-radius: 10px; padding: 16px; text-align: center;
+}
+.deploy-svc .svc-name { font-size: 14px; font-weight: 700; color: #0f172a; }
+.deploy-svc .svc-image { font-size: 11px; color: #818cf8; font-family: monospace; margin: 4px 0; }
+.deploy-svc .svc-port { font-size: 20px; font-weight: 800; color: #4f46e5; margin: 8px 0 4px; }
+.deploy-svc .svc-desc { font-size: 12px; color: #64748b; }
+
+/* ===== SCORING FORMULA ===== */
+.formula {
+  background: #1e1e2e; color: #cdd6f4; padding: 20px 28px; border-radius: 10px;
+  font-family: monospace; font-size: 16px; text-align: center; margin: 16px 0;
+  letter-spacing: 0.5px;
+}
+.formula .w { color: #89b4fa; font-weight: 700; }
+.formula .op { color: #f38ba8; }
+.formula .var { color: #a6e3a1; }
+
+/* ===== MISC ===== */
+.tag-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.tag-sm {
+  font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600;
+  background: #f1f5f9; color: #475569;
+}
+.tag-sm.impl { background: #dcfce7; color: #15803d; }
+.tag-sm.plan { background: #fef3c7; color: #92400e; }
+.divider { height: 1px; background: #e2e8f0; margin: 32px 0; }
+.note {
+  background: #eff6ff; border-left: 3px solid #3b82f6; padding: 12px 16px;
+  border-radius: 0 6px 6px 0; font-size: 13px; color: #1e40af; margin: 16px 0;
+}
+</style>
+</head>
+<body>
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <h1>QueryWise</h1>
+    <p>Platform Architecture</p>
+  </div>
+  <nav>
+    <div class="sep">Overview</div>
+    <a href="#overview">System Overview</a>
+    <a href="#tech-stack">Tech Stack</a>
+    <div class="sep">Layers</div>
+    <a href="#presentation">Presentation Layer</a>
+    <a href="#api-layer">API Layer</a>
+    <a href="#semantic">Semantic Layer</a>
+    <a href="#llm">LLM Orchestration</a>
+    <a href="#connectors">Connector Layer</a>
+    <div class="sep">Deep Dives</div>
+    <a href="#query-flow">Query Flow Pipeline</a>
+    <a href="#data-model">Data Model</a>
+    <a href="#security">Security Architecture</a>
+    <a href="#deployment">Deployment</a>
+  </nav>
+</aside>
+
+<!-- ===== MAIN CONTENT ===== -->
+<div class="main">
+
+<!-- HERO -->
+<header class="hero" id="top">
+  <h1>QueryWise Platform Architecture</h1>
+  <p>A full-stack application that translates natural language questions into SQL queries using a semantic metadata layer, multi-agent LLM orchestration, and a pluggable database connector system.</p>
+  <div class="badges">
+    <span class="badge badge-purple">Python 3.12 &middot; FastAPI</span>
+    <span class="badge badge-blue">React 19 &middot; TypeScript</span>
+    <span class="badge badge-green">PostgreSQL &middot; pgvector</span>
+    <span class="badge badge-amber">Claude &middot; OpenAI</span>
+    <span class="badge badge-slate">Docker Compose</span>
+  </div>
+</header>
+
+<!-- ===== 1. SYSTEM OVERVIEW ===== -->
+<section id="overview">
+  <h2>System Overview</h2>
+  <p>The platform is organized into five logical layers. A user's natural language question flows top-down through presentation, API, semantic, LLM, and connector layers before results travel back up.</p>
+
+  <div class="arch-diagram">
+    <div class="layer-stack">
+      <div class="layer layer-purple">
+        <span class="layer-label">Presentation</span>
+        React 19 SPA &mdash; Mantine UI &mdash; Query Interface &amp; Semantic Layer Management
+      </div>
+      <div class="arrow-down"></div>
+      <div class="layer layer-blue">
+        <span class="layer-label">API</span>
+        FastAPI &mdash; REST /api/v1 &mdash; Pydantic v2 Validation &mdash; Async Handlers
+      </div>
+      <div class="arrow-down"></div>
+      <div class="sub-layers">
+        <div class="layer layer-indigo">
+          <span class="layer-label">Semantic</span>
+          Context Builder<br>Schema Linker<br>Prompt Assembler
+        </div>
+        <div class="layer layer-amber">
+          <span class="layer-label">LLM Orchestration</span>
+          4 Agents<br>Complexity Router<br>Retry Loop
+        </div>
+        <div class="layer layer-teal">
+          <span class="layer-label">Connector</span>
+          BaseConnector ABC<br>Plugin Registry<br>PostgreSQL Impl
+        </div>
+      </div>
+      <div class="arrow-down"></div>
+      <div class="layer layer-green">
+        <span class="layer-label">Data</span>
+        App DB (pgvector &mdash; metadata, embeddings, history) &nbsp;|&nbsp; Target DBs (user databases)
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 2. TECH STACK ===== -->
+<section id="tech-stack">
+  <h2>Tech Stack</h2>
+
+  <div class="card-grid card-grid-2">
+    <div class="card card-accent">
+      <span class="tag">Backend</span>
+      <h4>Python 3.12 + FastAPI</h4>
+      <ul>
+        <li><strong>Framework:</strong> FastAPI with async/await throughout</li>
+        <li><strong>ORM:</strong> SQLAlchemy 2.0 (async) + asyncpg driver</li>
+        <li><strong>Migrations:</strong> Alembic with async support</li>
+        <li><strong>Embeddings:</strong> pgvector (Vector(1536), HNSW indexes)</li>
+        <li><strong>Validation:</strong> Pydantic v2 models</li>
+        <li><strong>Encryption:</strong> cryptography (Fernet AES-128)</li>
+        <li><strong>SQL Parsing:</strong> sqlparse for schema validation</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <span class="tag">Frontend</span>
+      <h4>React 19 + TypeScript 5.9</h4>
+      <ul>
+        <li><strong>Build:</strong> Vite 7.3 (dev proxy for /api)</li>
+        <li><strong>UI Library:</strong> Mantine 8.3 (AppShell, forms, notifications)</li>
+        <li><strong>Server State:</strong> TanStack React Query 5</li>
+        <li><strong>Routing:</strong> React Router 7</li>
+        <li><strong>HTTP:</strong> Axios 1.13</li>
+        <li><strong>Code Editor:</strong> Monaco Editor 4.7</li>
+        <li><strong>Icons:</strong> Tabler Icons 3.37</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <span class="tag">LLM Providers</span>
+      <h4>Provider-Agnostic Design</h4>
+      <ul>
+        <li><strong>Anthropic Claude:</strong> Haiku (simple), Sonnet (moderate/complex)</li>
+        <li><strong>OpenAI:</strong> GPT completions + text-embedding-3-small</li>
+        <li><strong>Ollama:</strong> Local inference via REST API (completions + embeddings)</li>
+        <li><strong>Temperature:</strong> Always 0.0 (deterministic)</li>
+        <li><strong>Output:</strong> JSON with text fallback extraction</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <span class="tag">Infrastructure</span>
+      <h4>Docker Compose &mdash; 5 Services</h4>
+      <ul>
+        <li><strong>app-db:</strong> pgvector/pgvector:pg16 (port 5432)</li>
+        <li><strong>sample-db:</strong> postgres:16 (port 5433)</li>
+        <li><strong>backend:</strong> FastAPI + uvicorn (port 8000)</li>
+        <li><strong>ollama:</strong> ollama/ollama (port 11434, profile: ollama-docker)</li>
+        <li><strong>frontend:</strong> Vite dev server (port 5173)</li>
+        <li><strong>Healthchecks:</strong> pg_isready on both databases</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 3. PRESENTATION LAYER ===== -->
+<section id="presentation">
+  <h2>Presentation Layer</h2>
+  <p>A single-page React application using Mantine's AppShell layout with a fixed sidebar for navigation. TanStack React Query manages all server state with query key-based caching and automatic invalidation on mutations.</p>
+
+  <h3>Application Shell</h3>
+  <div class="card-grid card-grid-3">
+    <div class="card">
+      <h4>Header (56px)</h4>
+      <p>"QueryWise" branding + subtitle</p>
+    </div>
+    <div class="card">
+      <h4>Sidebar (220px)</h4>
+      <p>NavLink items with Tabler icons, active state tracking via pathname</p>
+    </div>
+    <div class="card">
+      <h4>Main Content</h4>
+      <p>React Router Outlet renders active page</p>
+    </div>
+  </div>
+
+  <h3>Pages</h3>
+  <div class="card-grid card-grid-3">
+    <div class="card"><h4>QueryPage</h4><p>NL input, connection selector, SQL preview, results table with summary/highlights/follow-ups. Ctrl+Enter shortcut.</p></div>
+    <div class="card"><h4>ConnectionsPage</h4><p>CRUD for database connections. Test, introspect, expandable schema explorer.</p></div>
+    <div class="card"><h4>GlossaryPage</h4><p>Business glossary terms. Create/edit modal with SQL expression, related tables/columns.</p></div>
+    <div class="card"><h4>MetricsPage</h4><p>Named metric definitions. SQL expression, aggregation type, dimensions.</p></div>
+    <div class="card"><h4>DictionaryPage</h4><p>Column value mappings. Cascading connection &rarr; table &rarr; column selection.</p></div>
+    <div class="card"><h4>HistoryPage</h4><p>Query execution log with favorites, expandable SQL/summary, retry badges.</p></div>
+  </div>
+
+  <h3>State Management Pattern</h3>
+<pre><code><span class="cmt">// Custom hooks wrapping React Query</span>
+<span class="kw">function</span> <span class="fn">useConnections</span>() {
+  <span class="kw">return</span> useQuery({ queryKey: [<span class="str">'connections'</span>], queryFn: connectionApi.list });
+}
+
+<span class="kw">function</span> <span class="fn">useCreateConnection</span>() {
+  <span class="kw">const</span> qc = useQueryClient();
+  <span class="kw">return</span> useMutation({
+    mutationFn: (data) =&gt; connectionApi.create(data),
+    onSuccess: () =&gt; qc.invalidateQueries({ queryKey: [<span class="str">'connections'</span>] }),
+  });
+}</code></pre>
+</section>
+
+<!-- ===== 4. API LAYER ===== -->
+<section id="api-layer">
+  <h2>API Layer</h2>
+  <p>All endpoints live under <code>/api/v1</code>. FastAPI provides automatic OpenAPI docs at <code>/docs</code>. Every handler is async, and Pydantic v2 validates all request/response payloads.</p>
+
+  <table>
+    <thead>
+      <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="col-method get">GET</td><td><code>/health</code></td><td>Health check</td></tr>
+      <tr><td colspan="3" style="background:#f8fafc; font-weight:700; font-size:12px; color:#64748b; letter-spacing:0.5px;">CONNECTIONS</td></tr>
+      <tr><td class="col-method get">GET</td><td><code>/connections</code></td><td>List all connections</td></tr>
+      <tr><td class="col-method post">POST</td><td><code>/connections</code></td><td>Create connection (encrypts conn string)</td></tr>
+      <tr><td class="col-method get">GET</td><td><code>/connections/{id}</code></td><td>Get connection detail</td></tr>
+      <tr><td class="col-method put">PUT</td><td><code>/connections/{id}</code></td><td>Update connection</td></tr>
+      <tr><td class="col-method delete">DELETE</td><td><code>/connections/{id}</code></td><td>Delete connection + cascade</td></tr>
+      <tr><td class="col-method post">POST</td><td><code>/connections/{id}/test</code></td><td>Test database connectivity</td></tr>
+      <tr><td class="col-method post">POST</td><td><code>/connections/{id}/introspect</code></td><td>Discover schema &rarr; cache tables/columns/FKs</td></tr>
+      <tr><td colspan="3" style="background:#f8fafc; font-weight:700; font-size:12px; color:#64748b;">SCHEMA</td></tr>
+      <tr><td class="col-method get">GET</td><td><code>/connections/{id}/tables</code></td><td>List cached tables</td></tr>
+      <tr><td class="col-method get">GET</td><td><code>/tables/{table_id}</code></td><td>Table detail (columns, relationships)</td></tr>
+      <tr><td colspan="3" style="background:#f8fafc; font-weight:700; font-size:12px; color:#64748b;">SEMANTIC LAYER</td></tr>
+      <tr><td class="col-method get">GET</td><td><code>/connections/{id}/glossary</code></td><td>List glossary terms</td></tr>
+      <tr><td class="col-method post">POST</td><td><code>/connections/{id}/glossary</code></td><td>Create term</td></tr>
+      <tr><td class="col-method put">PUT</td><td><code>/connections/{id}/glossary/{tid}</code></td><td>Update term</td></tr>
+      <tr><td class="col-method delete">DELETE</td><td><code>/connections/{id}/glossary/{tid}</code></td><td>Delete term</td></tr>
+      <tr><td class="col-method get">GET</td><td><code>/connections/{id}/metrics</code></td><td>List metrics</td></tr>
+      <tr><td class="col-method post">POST</td><td><code>/connections/{id}/metrics</code></td><td>Create metric</td></tr>
+      <tr><td class="col-method put">PUT</td><td><code>/connections/{id}/metrics/{mid}</code></td><td>Update metric</td></tr>
+      <tr><td class="col-method delete">DELETE</td><td><code>/connections/{id}/metrics/{mid}</code></td><td>Delete metric</td></tr>
+      <tr><td class="col-method get">GET</td><td><code>/columns/{cid}/dictionary</code></td><td>List dictionary entries</td></tr>
+      <tr><td class="col-method post">POST</td><td><code>/columns/{cid}/dictionary</code></td><td>Create dictionary entry</td></tr>
+      <tr><td class="col-method get">GET</td><td><code>/connections/{id}/sample-queries</code></td><td>List sample queries</td></tr>
+      <tr><td class="col-method post">POST</td><td><code>/connections/{id}/sample-queries</code></td><td>Create sample query</td></tr>
+      <tr><td colspan="3" style="background:#f8fafc; font-weight:700; font-size:12px; color:#64748b;">QUERY</td></tr>
+      <tr><td class="col-method post">POST</td><td><code>/query</code></td><td>Full NL &rarr; SQL &rarr; execute &rarr; interpret pipeline</td></tr>
+      <tr><td class="col-method post">POST</td><td><code>/query/sql-only</code></td><td>Generate SQL without executing</td></tr>
+      <tr><td colspan="3" style="background:#f8fafc; font-weight:700; font-size:12px; color:#64748b;">HISTORY</td></tr>
+      <tr><td class="col-method get">GET</td><td><code>/query-history</code></td><td>List query executions</td></tr>
+      <tr><td class="col-method get">GET</td><td><code>/query-history/{id}</code></td><td>Get single execution</td></tr>
+      <tr><td class="col-method patch">PATCH</td><td><code>/query-history/{id}/favorite</code></td><td>Toggle favorite flag</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===== 5. SEMANTIC LAYER ===== -->
+<section id="semantic">
+  <h2>Semantic Layer <span class="badge badge-purple" style="font-size:10px; vertical-align:middle;">Core IP</span></h2>
+  <p>The semantic layer is the product's key differentiator. It selects the most relevant database context for each natural language question using a hybrid strategy: <strong>vector similarity + keyword matching + foreign key graph traversal</strong>.</p>
+
+  <h3>Context Building Pipeline (8 Steps)</h3>
+  <div class="flow">
+    <div class="flow-step">
+      <span class="step-num">1</span>
+      <span class="step-title">Embed Question</span>
+      <div class="step-desc">Generate vector via OpenAI <code>text-embedding-3-small</code> (1536-dim) or Ollama <code>nomic-embed-text</code> (768-dim)</div>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step">
+      <span class="step-num">2</span>
+      <span class="step-title">Vector Search</span>
+      <div class="step-desc">pgvector cosine distance against <code>cached_tables.description_embedding</code> &mdash; top 15 candidates</div>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step">
+      <span class="step-num">3</span>
+      <span class="step-title">Keyword Matching</span>
+      <div class="step-desc">Extract keywords (stop-word filtered), ILIKE match against table/column names. Scores: exact=1.0, component=0.7, substring=0.5</div>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step">
+      <span class="step-num">4</span>
+      <span class="step-title">FK Graph Expansion</span>
+      <div class="step-desc">From top 5 scored candidates, walk foreign key constraints to include necessary JOIN tables (relationship_score = 1.0)</div>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step" style="background:#f5f3ff; border-color:#a78bfa;">
+      <span class="step-num">5</span>
+      <span class="step-title">Score &amp; Prune</span>
+      <div class="step-desc">Weighted scoring formula, keep top 8 tables with all their columns</div>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step">
+      <span class="step-num">6</span>
+      <span class="step-title">Resolve Glossary, Metrics, Dictionary</span>
+      <div class="step-desc">Match business terms + metric names in question text &amp; by embedding similarity. Fetch value mappings for selected columns.</div>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step">
+      <span class="step-num">7</span>
+      <span class="step-title">Find Similar Sample Queries</span>
+      <div class="step-desc">Top 3 validated sample queries by embedding similarity &mdash; used as few-shot examples</div>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step step-success">
+      <span class="step-num">8</span>
+      <span class="step-title">Assemble Prompt</span>
+      <div class="step-desc">Format into structured sections: Schema &rarr; Relationships &rarr; Glossary &rarr; Metrics &rarr; Dictionary &rarr; Examples &rarr; Constraints</div>
+    </div>
+  </div>
+
+  <h3>Relevance Scoring Formula</h3>
+  <div class="formula">
+    score = <span class="w">0.5</span> <span class="op">&times;</span> <span class="var">embedding</span> <span class="op">+</span> <span class="w">0.3</span> <span class="op">&times;</span> <span class="var">keyword</span> <span class="op">+</span> <span class="w">0.2</span> <span class="op">&times;</span> <span class="var">fk_proximity</span> <span class="op">+</span> <span class="var">glossary_boost</span>
+  </div>
+
+  <div class="card-grid card-grid-4" style="margin-top:16px;">
+    <div class="card" style="text-align:center; border-top:3px solid #818cf8;">
+      <h4 style="font-size:24px; color:#4f46e5;">50%</h4>
+      <p><strong>Embedding</strong><br>Cosine similarity (0&ndash;1)</p>
+    </div>
+    <div class="card" style="text-align:center; border-top:3px solid #3b82f6;">
+      <h4 style="font-size:24px; color:#1d4ed8;">30%</h4>
+      <p><strong>Keyword</strong><br>Exact/partial name match</p>
+    </div>
+    <div class="card" style="text-align:center; border-top:3px solid #14b8a6;">
+      <h4 style="font-size:24px; color:#0d9488;">20%</h4>
+      <p><strong>FK Proximity</strong><br>Relationship connectivity</p>
+    </div>
+    <div class="card" style="text-align:center; border-top:3px solid #f59e0b;">
+      <h4 style="font-size:24px; color:#d97706;">+0.2</h4>
+      <p><strong>Glossary Boost</strong><br>Optional manual boost</p>
+    </div>
+  </div>
+
+  <h3>Semantic Metadata Types</h3>
+  <div class="card-grid card-grid-2">
+    <div class="card">
+      <h4>Business Glossary</h4>
+      <p>Maps business terms to SQL expressions.</p>
+      <p style="color:#475569; font-size:12px;"><code>"NPL"</code> &rarr; <code>exposures WHERE stage = 3</code> (Non-Performing Loans)</p>
+    </div>
+    <div class="card">
+      <h4>Metric Definitions</h4>
+      <p>Named calculations with aggregation types and dimensions.</p>
+      <p style="color:#475569; font-size:12px;"><code>"Coverage Ratio"</code> &rarr; <code>SUM(ecl_provisions.ecl_lifetime) / SUM(exposures.ead)</code> by stage, facility_type</p>
+    </div>
+    <div class="card">
+      <h4>Data Dictionary</h4>
+      <p>Column value mappings so the LLM understands coded values.</p>
+      <p style="color:#475569; font-size:12px;"><code>stage: 1 &rarr; Performing, 2 &rarr; SICR, 3 &rarr; Credit-Impaired</code></p>
+    </div>
+    <div class="card">
+      <h4>Sample Queries</h4>
+      <p>Validated NL&rarr;SQL pairs used as few-shot examples.</p>
+      <p style="color:#475569; font-size:12px;"><code>"total ECL by stage"</code> &rarr; <code>SELECT stage, SUM(ecl_lifetime) FROM ... GROUP BY stage</code></p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 6. LLM ORCHESTRATION ===== -->
+<section id="llm">
+  <h2>LLM Orchestration Layer</h2>
+  <p>A multi-agent system with complexity-based model routing and an error recovery loop. All agents share the same provider-agnostic interface through <code>BaseLLMProvider</code>.</p>
+
+  <h3>Complexity Router</h3>
+  <table>
+    <thead>
+      <tr><th>Tier</th><th>Signal Keywords</th><th>Model</th><th>Max Tokens</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="badge badge-green">Simple</span></td>
+        <td><code>what is</code>, <code>show me</code>, single entity lookups</td>
+        <td><code>claude-haiku-4-5-20251001</code></td>
+        <td>2,048</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-blue">Moderate</span></td>
+        <td><code>group by</code>, <code>join</code>, <code>total</code>, <code>average</code>, <code>per</code>, <code>by</code></td>
+        <td><code>claude-sonnet-4-20250514</code></td>
+        <td>4,096</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-purple">Complex</span></td>
+        <td><code>trend</code>, <code>compare</code>, <code>window</code>, <code>YoY</code>, <code>cohort</code>, <code>percentile</code>, <code>pivot</code></td>
+        <td><code>claude-sonnet-4-20250514</code></td>
+        <td>4,096</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Four Specialized Agents</h3>
+  <div class="card-grid card-grid-2">
+    <div class="card" style="border-left:3px solid #818cf8;">
+      <h4>QueryComposerAgent</h4>
+      <p><strong>Input:</strong> NL question + assembled context</p>
+      <p><strong>Output:</strong> SQL + explanation + confidence (0&ndash;1) + tables_used + assumptions</p>
+      <p><strong>Response:</strong> JSON parse with regex fallback for code-fenced SQL</p>
+    </div>
+    <div class="card" style="border-left:3px solid #f59e0b;">
+      <h4>SQLValidatorAgent</h4>
+      <p><strong>Level 1:</strong> Static regex blocklist (DROP, DELETE, INSERT, ALTER, CREATE, TRUNCATE, pg_sleep, etc.)</p>
+      <p><strong>Level 2:</strong> Schema reference check via sqlparse (tables/columns exist)</p>
+      <p><strong>Status:</strong> VALID | UNSAFE | SYNTAX_ERROR | SCHEMA_MISMATCH</p>
+    </div>
+    <div class="card" style="border-left:3px solid #10b981;">
+      <h4>ResultInterpreterAgent</h4>
+      <p><strong>Input:</strong> Question + SQL + results preview (max 20 rows)</p>
+      <p><strong>Output:</strong> NL summary + key highlights + suggested follow-up questions</p>
+      <p><strong>Style:</strong> Data analyst &mdash; concise, insight-focused</p>
+    </div>
+    <div class="card" style="border-left:3px solid #ef4444;">
+      <h4>ErrorHandlerAgent</h4>
+      <p><strong>Trigger:</strong> Validation failure OR database execution error</p>
+      <p><strong>Input:</strong> Failed SQL + error + schema context + previous attempts</p>
+      <p><strong>Output:</strong> Corrected SQL + explanation + should_retry flag</p>
+      <p><strong>Max retries:</strong> 3 per phase (validation + execution = up to 6 total)</p>
+    </div>
+  </div>
+
+  <h3>Provider Interface</h3>
+<pre><code><span class="kw">class</span> <span class="fn">BaseLLMProvider</span>(ABC):
+    provider_type: LLMProviderType  <span class="cmt"># ANTHROPIC | OPENAI | OLLAMA</span>
+
+    <span class="kw">async def</span> <span class="fn">complete</span>(messages: list[LLMMessage], config: LLMConfig) -&gt; LLMResponse
+    <span class="kw">async def</span> <span class="fn">stream</span>(messages: list[LLMMessage], config: LLMConfig) -&gt; AsyncIterator[str]
+    <span class="kw">async def</span> <span class="fn">generate_embedding</span>(text: str) -&gt; list[float]  <span class="cmt"># configurable dim (1536 OpenAI, 768 Ollama)</span>
+    <span class="kw">def</span> <span class="fn">list_models</span>() -&gt; list[str]</code></pre>
+</section>
+
+<!-- ===== 7. CONNECTOR LAYER ===== -->
+<section id="connectors">
+  <h2>Connector Layer</h2>
+  <p>A plugin system for database connectivity. All connectors implement <code>BaseConnector</code> ABC and are registered in a global registry with connection pooling and health checks.</p>
+
+  <h3>BaseConnector Interface</h3>
+<pre><code><span class="kw">class</span> <span class="fn">BaseConnector</span>(ABC):
+    connector_type: ConnectorType
+
+    <span class="kw">async def</span> <span class="fn">connect</span>(connection_string: str, **kwargs) -&gt; None
+    <span class="kw">async def</span> <span class="fn">disconnect</span>() -&gt; None
+    <span class="kw">async def</span> <span class="fn">test_connection</span>() -&gt; bool
+    <span class="kw">async def</span> <span class="fn">introspect_schemas</span>() -&gt; list[str]
+    <span class="kw">async def</span> <span class="fn">introspect_tables</span>(schema=<span class="str">"public"</span>) -&gt; list[TableInfo]
+    <span class="kw">async def</span> <span class="fn">execute_query</span>(sql, params, timeout_seconds=<span class="num">30</span>, max_rows=<span class="num">1000</span>) -&gt; QueryResult
+    <span class="kw">async def</span> <span class="fn">get_sample_values</span>(schema, table, column, limit=<span class="num">20</span>) -&gt; list[Any]</code></pre>
+
+  <h3>Supported Connectors</h3>
+  <div class="card-grid card-grid-4">
+    <div class="card" style="text-align:center;">
+      <h4>PostgreSQL</h4>
+      <span class="tag-sm impl">Implemented</span>
+      <p>asyncpg pool, read-only transactions, statement timeout</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <h4>MySQL</h4>
+      <span class="tag-sm plan">Planned</span>
+      <p>ConnectorType enum defined</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <h4>Snowflake</h4>
+      <span class="tag-sm plan">Planned</span>
+      <p>ConnectorType enum defined</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <h4>BigQuery</h4>
+      <span class="tag-sm plan">Planned</span>
+      <p>ConnectorType enum defined</p>
+    </div>
+  </div>
+
+  <h3>PostgreSQL Implementation Details</h3>
+  <div class="card-grid card-grid-3">
+    <div class="card">
+      <h4>Read-Only Enforcement</h4>
+      <p><code>conn.transaction(readonly=True)</code> at asyncpg level. Every query runs inside a read-only transaction.</p>
+    </div>
+    <div class="card">
+      <h4>Statement Timeout</h4>
+      <p><code>SET LOCAL statement_timeout = '{ms}'</code> per execution. Default 30s, configurable per connection.</p>
+    </div>
+    <div class="card">
+      <h4>Auto Row Limiting</h4>
+      <p>Wraps query: <code>SELECT * FROM (query) AS _q LIMIT N+1</code>. Detects truncation when rows &gt; max.</p>
+    </div>
+  </div>
+
+  <h3>Plugin Registry</h3>
+<pre><code><span class="cmt"># Register a new connector type</span>
+<span class="fn">register_connector</span>(ConnectorType.MYSQL, MySQLConnector)
+
+<span class="cmt"># Get or create a cached connector instance</span>
+connector = <span class="kw">await</span> <span class="fn">get_or_create_connector</span>(
+    connection_id=<span class="str">"uuid-here"</span>,
+    connector_type=<span class="str">"postgresql"</span>,
+    connection_string=<span class="str">"postgresql://..."</span>
+)
+<span class="cmt"># Cached by connection_id, health-checked before reuse</span></code></pre>
+</section>
+
+<!-- ===== 8. QUERY FLOW ===== -->
+<section id="query-flow">
+  <h2>Query Flow Pipeline</h2>
+  <p>End-to-end flow when a user submits a natural language question through <code>POST /api/v1/query</code>.</p>
+
+  <div class="flow">
+    <div class="flow-step" style="border-color:#a78bfa; background:#f5f3ff;">
+      <span class="step-num">1</span>
+      <span class="step-title">User asks a question</span>
+      <div class="step-desc">"What is the total ECL by stage?"</div>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step">
+      <span class="step-num">2</span>
+      <span class="step-title">Context Builder</span>
+      <div class="step-desc">Embed question &rarr; hybrid table search (vector + keyword + FK) &rarr; resolve glossary/metrics/dictionary &rarr; find sample queries &rarr; assemble structured prompt</div>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step">
+      <span class="step-num">3</span>
+      <span class="step-title">LLM Router</span>
+      <div class="step-desc">Estimate complexity (simple/moderate/complex) &rarr; select model (Haiku or Sonnet) &rarr; set temperature=0.0</div>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step" style="border-color:#818cf8;">
+      <span class="step-num">4</span>
+      <span class="step-title">QueryComposerAgent</span>
+      <div class="step-desc">LLM generates SQL from context + question. Parses JSON response (or fallback regex extraction). Returns SQL + explanation + confidence.</div>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step step-error">
+      <span class="step-num">5</span>
+      <span class="step-title">SQLValidatorAgent</span>
+      <div class="step-desc">Static blocklist check (DDL/DML/injection) + schema reference validation (sqlparse). If INVALID &rarr; ErrorHandlerAgent retries up to 3x.</div>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-branch">Retry loop (max 3) &mdash; ErrorHandlerAgent corrects SQL</div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step" style="border-color:#14b8a6;">
+      <span class="step-num">6</span>
+      <span class="step-title">Execute via Connector</span>
+      <div class="step-desc">Read-only transaction + statement timeout + auto LIMIT wrapping. If DB error &rarr; ErrorHandlerAgent retries up to 3x.</div>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-branch">Retry loop (max 3) &mdash; ErrorHandlerAgent corrects SQL on DB errors</div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step step-success">
+      <span class="step-num">7</span>
+      <span class="step-title">ResultInterpreterAgent</span>
+      <div class="step-desc">LLM generates natural language summary, key highlights, and suggested follow-up questions from results (max 20 rows preview).</div>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step" style="border-color:#6366f1; background:#eef2ff;">
+      <span class="step-num">8</span>
+      <span class="step-title">Save to History</span>
+      <div class="step-desc">QueryExecution record: question, generated_sql, final_sql, status, timing, tokens, retry_count, summary, is_favorite.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 9. DATA MODEL ===== -->
+<section id="data-model">
+  <h2>Data Model</h2>
+  <p>All models use UUID primary keys, <code>created_at</code>/<code>updated_at</code> timestamps, and pgvector <code>Vector(N)</code> columns for embedding search (N is configurable: 1536 for OpenAI, 768 for Ollama). The app database runs on PostgreSQL 16 with the pgvector extension.</p>
+
+  <div class="er-grid">
+    <div class="er-table">
+      <div class="er-table-head">database_connections</div>
+      <div class="er-col"><span><span class="pk">PK</span> id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span>name</span><span class="type">VARCHAR(255)</span></div>
+      <div class="er-col"><span>connector_type</span><span class="type">VARCHAR(50)</span></div>
+      <div class="er-col"><span>connection_string_encrypted</span><span class="type">TEXT</span></div>
+      <div class="er-col"><span>default_schema</span><span class="type">VARCHAR(255)</span></div>
+      <div class="er-col"><span>max_query_timeout_seconds</span><span class="type">INTEGER</span></div>
+      <div class="er-col"><span>max_rows</span><span class="type">INTEGER</span></div>
+      <div class="er-col"><span>is_active</span><span class="type">BOOLEAN</span></div>
+      <div class="er-col"><span>last_introspected_at</span><span class="type">TIMESTAMP</span></div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-head">cached_tables <span class="vec">Vector(1536)</span></div>
+      <div class="er-col"><span><span class="pk">PK</span> id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span><span class="fk">FK</span> connection_id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span>schema_name, table_name</span><span class="type">VARCHAR</span></div>
+      <div class="er-col"><span>table_type, comment</span><span class="type">TEXT</span></div>
+      <div class="er-col"><span>row_count_estimate</span><span class="type">INTEGER</span></div>
+      <div class="er-col"><span>description_embedding</span><span class="type" style="color:#f59e0b;">VECTOR(1536)</span></div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-head">cached_columns <span class="vec">Vector(1536)</span></div>
+      <div class="er-col"><span><span class="pk">PK</span> id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span><span class="fk">FK</span> table_id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span>column_name, data_type</span><span class="type">VARCHAR</span></div>
+      <div class="er-col"><span>is_nullable, is_primary_key</span><span class="type">BOOLEAN</span></div>
+      <div class="er-col"><span>comment</span><span class="type">TEXT</span></div>
+      <div class="er-col"><span>description_embedding</span><span class="type" style="color:#f59e0b;">VECTOR(1536)</span></div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-head">cached_relationships</div>
+      <div class="er-col"><span><span class="pk">PK</span> id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span><span class="fk">FK</span> connection_id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span><span class="fk">FK</span> source_table_id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span><span class="fk">FK</span> target_table_id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span>source_column, target_column</span><span class="type">VARCHAR</span></div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-head">glossary_terms <span class="vec">Vector(1536)</span></div>
+      <div class="er-col"><span><span class="pk">PK</span> id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span><span class="fk">FK</span> connection_id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span>term, definition</span><span class="type">TEXT</span></div>
+      <div class="er-col"><span>sql_expression</span><span class="type">TEXT</span></div>
+      <div class="er-col"><span>related_tables, related_columns</span><span class="type">TEXT[]</span></div>
+      <div class="er-col"><span>term_embedding</span><span class="type" style="color:#f59e0b;">VECTOR(1536)</span></div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-head">metric_definitions <span class="vec">Vector(1536)</span></div>
+      <div class="er-col"><span><span class="pk">PK</span> id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span><span class="fk">FK</span> connection_id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span>metric_name, display_name</span><span class="type">VARCHAR</span></div>
+      <div class="er-col"><span>sql_expression</span><span class="type">TEXT</span></div>
+      <div class="er-col"><span>aggregation_type</span><span class="type">VARCHAR(50)</span></div>
+      <div class="er-col"><span>dimensions</span><span class="type">TEXT[]</span></div>
+      <div class="er-col"><span>metric_embedding</span><span class="type" style="color:#f59e0b;">VECTOR(1536)</span></div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-head">dictionary_entries</div>
+      <div class="er-col"><span><span class="pk">PK</span> id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span><span class="fk">FK</span> column_id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span>raw_value</span><span class="type">VARCHAR(255)</span></div>
+      <div class="er-col"><span>display_value</span><span class="type">VARCHAR(255)</span></div>
+      <div class="er-col"><span>description</span><span class="type">TEXT</span></div>
+      <div class="er-col"><span>sort_order</span><span class="type">INTEGER</span></div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-head">sample_queries <span class="vec">Vector(1536)</span></div>
+      <div class="er-col"><span><span class="pk">PK</span> id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span><span class="fk">FK</span> connection_id</span><span class="type">UUID</span></div>
+      <div class="er-col"><span>natural_language, sql_query</span><span class="type">TEXT</span></div>
+      <div class="er-col"><span>tags</span><span class="type">TEXT[]</span></div>
+      <div class="er-col"><span>is_validated</span><span class="type">BOOLEAN</span></div>
+      <div class="er-col"><span>question_embedding</span><span class="type" style="color:#f59e0b;">VECTOR(1536)</span></div>
+    </div>
+  </div>
+
+  <div class="er-grid" style="grid-template-columns:1fr;">
+    <div class="er-table">
+      <div class="er-table-head">query_executions</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr;">
+        <div>
+          <div class="er-col"><span><span class="pk">PK</span> id</span><span class="type">UUID</span></div>
+          <div class="er-col"><span><span class="fk">FK</span> connection_id</span><span class="type">UUID</span></div>
+          <div class="er-col"><span>natural_language</span><span class="type">TEXT</span></div>
+          <div class="er-col"><span>generated_sql</span><span class="type">TEXT</span></div>
+          <div class="er-col"><span>final_sql</span><span class="type">TEXT</span></div>
+        </div>
+        <div>
+          <div class="er-col"><span>execution_status</span><span class="type">VARCHAR(20)</span></div>
+          <div class="er-col"><span>error_message</span><span class="type">TEXT</span></div>
+          <div class="er-col"><span>row_count</span><span class="type">INTEGER</span></div>
+          <div class="er-col"><span>execution_time_ms</span><span class="type">FLOAT</span></div>
+          <div class="er-col"><span>retry_count</span><span class="type">INTEGER</span></div>
+        </div>
+        <div>
+          <div class="er-col"><span>llm_provider</span><span class="type">VARCHAR(50)</span></div>
+          <div class="er-col"><span>llm_model</span><span class="type">VARCHAR(100)</span></div>
+          <div class="er-col"><span>llm_input_tokens</span><span class="type">INTEGER</span></div>
+          <div class="er-col"><span>result_summary</span><span class="type">TEXT</span></div>
+          <div class="er-col"><span>is_favorite</span><span class="type">BOOLEAN</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Embedding columns</strong> are present on 5 tables: <code>cached_tables</code>, <code>cached_columns</code>, <code>glossary_terms</code>, <code>metric_definitions</code>, and <code>sample_queries</code>. Dimension is configurable via <code>EMBEDDING_DIMENSION</code> (1536 for OpenAI, 768 for Ollama). HNSW indexes for fast cosine similarity search.
+  </div>
+</section>
+
+<!-- ===== 10. SECURITY ===== -->
+<section id="security">
+  <h2>Security Architecture</h2>
+  <p>Defense-in-depth strategy with multiple independent safety layers, ensuring no single bypass can allow destructive operations.</p>
+
+  <div class="security-grid">
+    <div class="sec-card">
+      <span class="icon">&#x1f512;</span>
+      <h4>Read-Only Transactions</h4>
+      <p>Every query executes inside <code>asyncpg transaction(readonly=True)</code>. The database itself rejects any write operations.</p>
+    </div>
+    <div class="sec-card">
+      <span class="icon">&#x1f6ab;</span>
+      <h4>SQL Blocklist</h4>
+      <p>Static regex patterns block DDL (<code>DROP</code>, <code>ALTER</code>, <code>CREATE</code>), DML (<code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>), admin commands, and injection patterns (<code>pg_sleep</code>, <code>dblink</code>, stacked queries).</p>
+    </div>
+    <div class="sec-card">
+      <span class="icon">&#x1f511;</span>
+      <h4>Encrypted Credentials</h4>
+      <p>Connection strings encrypted at rest with Fernet (AES-128-CBC). Never returned in API responses &mdash; only <code>has_connection_string: boolean</code>.</p>
+    </div>
+    <div class="sec-card">
+      <span class="icon">&#x23f1;</span>
+      <h4>Statement Timeout</h4>
+      <p>PostgreSQL <code>SET LOCAL statement_timeout</code> per query. Default 30 seconds, configurable per connection.</p>
+    </div>
+    <div class="sec-card">
+      <span class="icon">&#x1f4ca;</span>
+      <h4>Row Limits</h4>
+      <p>Auto-wrapping queries with <code>LIMIT N+1</code> to cap result size. Default 1,000 rows, configurable per connection. Truncation flag in response.</p>
+    </div>
+    <div class="sec-card">
+      <span class="icon">&#x1f310;</span>
+      <h4>CORS Restriction</h4>
+      <p>FastAPI CORS middleware restricts origins to configured list. Default: <code>http://localhost:5173</code> only.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 11. DEPLOYMENT ===== -->
+<section id="deployment">
+  <h2>Deployment</h2>
+  <p>The application runs as 4 core Docker Compose services (+ optional Ollama via <code>--profile ollama-docker</code>) with health-check dependencies. A single <code>docker compose up</code> brings up the full stack.</p>
+
+  <div class="deploy-grid">
+    <div class="deploy-svc" style="border-color:#10b981; border-width:2px;">
+      <div class="svc-name">app-db</div>
+      <div class="svc-image">pgvector/pgvector:pg16</div>
+      <div class="svc-port">:5432</div>
+      <div class="svc-desc">App metadata, embeddings, glossary, query history. pgvector extension enabled.</div>
+    </div>
+    <div class="deploy-svc" style="border-color:#3b82f6; border-width:2px;">
+      <div class="svc-name">sample-db</div>
+      <div class="svc-image">postgres:16</div>
+      <div class="svc-port">:5433</div>
+      <div class="svc-desc">Sample IFRS 9 banking database. Auto-seeded with counterparties, facilities, exposures, ECL provisions, collateral, staging history.</div>
+    </div>
+    <div class="deploy-svc" style="border-color:#64748b; border-width:2px;">
+      <div class="svc-name">ollama</div>
+      <div class="svc-image">ollama/ollama</div>
+      <div class="svc-port">:11434</div>
+      <div class="svc-desc">Local LLM inference. Optional &mdash; enabled via <code>--profile ollama-docker</code>.</div>
+    </div>
+    <div class="deploy-svc" style="border-color:#8b5cf6; border-width:2px;">
+      <div class="svc-name">backend</div>
+      <div class="svc-image">python:3.12-slim</div>
+      <div class="svc-port">:8000</div>
+      <div class="svc-desc">FastAPI + uvicorn with hot reload. Depends on app-db healthy.</div>
+    </div>
+    <div class="deploy-svc" style="border-color:#f59e0b; border-width:2px;">
+      <div class="svc-name">frontend</div>
+      <div class="svc-image">node:20-slim</div>
+      <div class="svc-port">:5173</div>
+      <div class="svc-desc">Vite dev server with API proxy to backend.</div>
+    </div>
+  </div>
+
+  <h3>Service Dependency Graph</h3>
+<pre><code>frontend (:5173) ──proxy /api──▶ backend (:8000) ──depends_on──▶ app-db (:5432)
+                                       │
+                                       ├──connects to──▶ sample-db (:5433)
+                                       │                 (or any target DB)
+                                       └──optional────▶ ollama (:11434)
+                                                         (local LLM, profile: ollama-docker)</code></pre>
+
+  <h3>Quick Start</h3>
+<pre><code><span class="cmt"># 1. Clone and configure</span>
+git clone &lt;repo-url&gt; querywise && cd querywise
+cp .env.example .env
+<span class="cmt"># Edit .env — add ANTHROPIC_API_KEY and/or OPENAI_API_KEY</span>
+
+<span class="cmt"># 2. Start everything</span>
+docker compose up
+
+<span class="cmt"># 3. Open browser</span>
+<span class="cmt"># Frontend:  http://localhost:5173</span>
+<span class="cmt"># API Docs:  http://localhost:8000/docs</span></code></pre>
+
+  <h3>Environment Variables</h3>
+  <table>
+    <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>DATABASE_URL</code></td><td><code>postgresql+asyncpg://querywise:querywise_dev@localhost:5432/querywise</code></td><td>App metadata DB</td></tr>
+      <tr><td><code>ENCRYPTION_KEY</code></td><td>dev key</td><td>Fernet key for connection strings</td></tr>
+      <tr><td><code>DEFAULT_LLM_PROVIDER</code></td><td><code>anthropic</code></td><td>LLM provider</td></tr>
+      <tr><td><code>DEFAULT_LLM_MODEL</code></td><td><code>claude-sonnet-4-20250514</code></td><td>Default model</td></tr>
+      <tr><td><code>EMBEDDING_MODEL</code></td><td><code>text-embedding-3-small</code></td><td>OpenAI embedding model</td></tr>
+      <tr><td><code>ANTHROPIC_API_KEY</code></td><td>&mdash;</td><td>Required for Anthropic</td></tr>
+      <tr><td><code>OPENAI_API_KEY</code></td><td>&mdash;</td><td>Required for OpenAI (completions + embeddings)</td></tr>
+      <tr><td><code>OLLAMA_BASE_URL</code></td><td><code>http://localhost:11434</code></td><td>Ollama server URL</td></tr>
+      <tr><td><code>OLLAMA_MODEL</code></td><td><code>llama3.1:8b</code></td><td>Ollama model for completions</td></tr>
+      <tr><td><code>OLLAMA_EMBEDDING_MODEL</code></td><td><code>nomic-embed-text</code></td><td>Ollama model for embeddings (768-dim)</td></tr>
+      <tr><td><code>EMBEDDING_DIMENSION</code></td><td><code>1536</code></td><td>Vector dimension (1536 OpenAI, 768 Ollama)</td></tr>
+      <tr><td><code>AUTO_SETUP_SAMPLE_DB</code></td><td><code>true</code></td><td>Auto-create sample DB connection + seed metadata</td></tr>
+      <tr><td><code>SAMPLE_DB_CONNECTION_STRING</code></td><td><code>postgresql://...sample-db:5432/sampledb</code></td><td>Sample DB for auto-setup</td></tr>
+      <tr><td><code>DEFAULT_QUERY_TIMEOUT_SECONDS</code></td><td><code>30</code></td><td>Max query execution time</td></tr>
+      <tr><td><code>DEFAULT_MAX_ROWS</code></td><td><code>1000</code></td><td>Max result rows</td></tr>
+      <tr><td><code>MAX_CONTEXT_TABLES</code></td><td><code>8</code></td><td>Max tables in LLM context</td></tr>
+      <tr><td><code>CORS_ORIGINS</code></td><td><code>["http://localhost:5173"]</code></td><td>Allowed CORS origins</td></tr>
+      <tr><td><code>VITE_API_URL</code></td><td><code>http://localhost:8000</code></td><td>Frontend API target</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</div><!-- /.main -->
+
+<!-- ===== SIDEBAR ACTIVE TRACKING ===== -->
+<script>
+(function() {
+  const links = document.querySelectorAll('.sidebar nav a[href^="#"]');
+  const sections = [];
+  links.forEach(a => {
+    const id = a.getAttribute('href').slice(1);
+    const el = document.getElementById(id);
+    if (el) sections.push({ el, link: a });
+  });
+  function update() {
+    let current = sections[0];
+    for (const s of sections) {
+      if (s.el.getBoundingClientRect().top <= 80) current = s;
+    }
+    links.forEach(a => a.classList.remove('active'));
+    if (current) current.link.classList.add('active');
+  }
+  window.addEventListener('scroll', update, { passive: true });
+  update();
+})();
+</script>
+
+</body>
+</html>

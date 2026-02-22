@@ -1,0 +1,99 @@
+import uuid
+
+from fastapi import APIRouter, Depends
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.v1.schemas.metric import MetricCreate, MetricResponse, MetricUpdate
+from app.core.exceptions import NotFoundError
+from app.db.models.metric import MetricDefinition
+from app.db.session import get_db
+
+router = APIRouter(tags=["metrics"])
+
+
+@router.get(
+    "/connections/{connection_id}/metrics",
+    response_model=list[MetricResponse],
+)
+async def list_metrics(
+    connection_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(MetricDefinition)
+        .where(MetricDefinition.connection_id == connection_id)
+        .order_by(MetricDefinition.display_name)
+    )
+    return list(result.scalars().all())
+
+
+@router.post(
+    "/connections/{connection_id}/metrics",
+    response_model=MetricResponse,
+    status_code=201,
+)
+async def create_metric(
+    connection_id: uuid.UUID,
+    body: MetricCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    metric = MetricDefinition(
+        connection_id=connection_id,
+        **body.model_dump(),
+    )
+    db.add(metric)
+    await db.flush()
+    return metric
+
+
+@router.get(
+    "/connections/{connection_id}/metrics/{metric_id}",
+    response_model=MetricResponse,
+)
+async def get_metric(
+    connection_id: uuid.UUID,
+    metric_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    metric = await db.get(MetricDefinition, metric_id)
+    if not metric or metric.connection_id != connection_id:
+        raise NotFoundError("Metric", str(metric_id))
+    return metric
+
+
+@router.put(
+    "/connections/{connection_id}/metrics/{metric_id}",
+    response_model=MetricResponse,
+)
+async def update_metric(
+    connection_id: uuid.UUID,
+    metric_id: uuid.UUID,
+    body: MetricUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    metric = await db.get(MetricDefinition, metric_id)
+    if not metric or metric.connection_id != connection_id:
+        raise NotFoundError("Metric", str(metric_id))
+
+    for key, value in body.model_dump(exclude_none=True).items():
+        setattr(metric, key, value)
+
+    await db.flush()
+    return metric
+
+
+@router.delete(
+    "/connections/{connection_id}/metrics/{metric_id}",
+    status_code=204,
+)
+async def delete_metric(
+    connection_id: uuid.UUID,
+    metric_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    metric = await db.get(MetricDefinition, metric_id)
+    if not metric or metric.connection_id != connection_id:
+        raise NotFoundError("Metric", str(metric_id))
+    await db.delete(metric)
+    await db.flush()
