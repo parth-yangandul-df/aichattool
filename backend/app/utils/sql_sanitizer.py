@@ -22,6 +22,9 @@ _BLOCKED_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bpg_terminate_backend\b", re.IGNORECASE), "pg_terminate_backend is not allowed"),
     (re.compile(r"\bpg_cancel_backend\b", re.IGNORECASE), "pg_cancel_backend is not allowed"),
     (re.compile(r"\bdblink\b", re.IGNORECASE), "dblink is not allowed"),
+    # BigQuery-specific
+    (re.compile(r"\bEXPORT\s+DATA\b", re.IGNORECASE), "EXPORT DATA is not allowed"),
+    (re.compile(r"\bLOAD\s+DATA\b", re.IGNORECASE), "LOAD DATA is not allowed"),
     # Stacked queries (semicolon followed by another statement)
     (
         re.compile(r";\s*\b(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE)\b", re.IGNORECASE),

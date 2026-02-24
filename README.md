@@ -25,7 +25,7 @@ A full-stack application that translates natural language questions into SQL que
 │                 │                            │
 │  ┌──────────────▼──────────────────────┐    │
 │  │  CONNECTOR LAYER (plugin system)    │    │
-│  │  BaseConnector → PostgreSQL impl    │    │
+│  │  BaseConnector → PostgreSQL, BigQuery│   │
 │  └─────────────────────────────────────┘    │
 └─────────────────────────────────────────────┘
 ```
@@ -38,7 +38,7 @@ A full-stack application that translates natural language questions into SQL que
 - **Multi-provider LLM** — Anthropic Claude, OpenAI, Ollama (provider-agnostic design)
 - **4 specialized LLM agents** — Query Composer, SQL Validator, Result Interpreter, Error Handler
 - **Intelligent routing** — routes simple/moderate/complex queries to appropriate models
-- **Plugin connector system** — PostgreSQL built-in, extensible to MySQL, Snowflake, BigQuery
+- **Plugin connector system** — PostgreSQL and BigQuery built-in, extensible to MySQL, Snowflake, and more
 - **Security by default** — read-only query execution, SQL blocklist, encrypted connection strings
 - **Query history** — full execution log with favorites, retry counts, token usage
 - **Schema introspection** — auto-discovers tables, columns, types, relationships from target databases
@@ -92,6 +92,16 @@ On Linux, if `host.docker.internal` is not resolvable in your containers, add th
 extra_hosts:
   - "host.docker.internal:host-gateway"
 ```
+
+### Connecting to BigQuery
+
+1. Select **BigQuery** as the connector type in the Add Connection form
+2. Enter your GCP **Project ID**
+3. Paste your **service account JSON key** (the full contents of the key file)
+4. Set the **Dataset** name (BigQuery's equivalent of a schema)
+5. Click Create, then Test and Introspect
+
+The service account needs the **BigQuery User** role (or equivalent) to run queries. The connection credentials are encrypted at rest using Fernet encryption.
 
 ### First Steps
 
@@ -292,8 +302,10 @@ querywise/
 │   │   ├── connectors/
 │   │   │   ├── base_connector.py    # BaseConnector ABC
 │   │   │   ├── connector_registry.py# Plugin registry + connection caching
-│   │   │   └── postgresql/
-│   │   │       └── connector.py     # Full PostgreSQL implementation
+│   │   │   ├── postgresql/
+│   │   │   │   └── connector.py     # PostgreSQL (asyncpg, connection pooling)
+│   │   │   └── bigquery/
+│   │   │       └── connector.py     # BigQuery (google-cloud-bigquery, service account auth)
 │   │   └── utils/
 │   │       └── sql_sanitizer.py     # Regex blocklist (DDL/DML/admin/injection)
 │   ├── scripts/
@@ -370,7 +382,7 @@ When a user asks a natural language question, the system runs a 7-step pipeline:
 └──────────────────────────────┬──────────────────────────┘
                                ▼
 ┌─ 5. EXECUTION ──────────────────────────────────────────┐
-│  Run SQL via PostgreSQL connector                       │
+│  Run SQL via database connector (PostgreSQL / BigQuery)  │
 │  Read-only transaction, statement timeout, row limit    │
 │  If DB error → ErrorHandlerAgent retries (max 3x)      │
 └──────────────────────────────┬──────────────────────────┘
@@ -537,8 +549,8 @@ Auto-setup populates:
 
 ## Security
 
-- **Read-only execution** — all queries run inside `SET TRANSACTION READ ONLY` at the connector level
-- **SQL blocklist** — static regex patterns block DDL (`DROP`, `ALTER`, `CREATE`), DML (`INSERT`, `UPDATE`, `DELETE`), admin commands (`GRANT`, `COPY`, `EXECUTE`), and injection patterns (`pg_sleep`, `dblink`, stacked queries)
+- **Read-only execution** — PostgreSQL queries run inside `SET TRANSACTION READ ONLY`; BigQuery uses read-scoped credentials
+- **SQL blocklist** — static regex patterns block DDL (`DROP`, `ALTER`, `CREATE`), DML (`INSERT`, `UPDATE`, `DELETE`), admin commands (`GRANT`, `COPY`, `EXECUTE`), injection patterns (`pg_sleep`, `dblink`, stacked queries), and BigQuery-specific operations (`EXPORT DATA`, `LOAD DATA`)
 - **Encrypted credentials** — connection strings encrypted at rest using Fernet (AES-128-CBC)
 - **Statement timeout** — configurable per connection (default 30s)
 - **Row limits** — configurable per connection (default 1000 rows)

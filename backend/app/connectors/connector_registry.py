@@ -6,6 +6,14 @@ _CONNECTOR_CLASSES: dict[ConnectorType, type[BaseConnector]] = {
     ConnectorType.POSTGRESQL: PostgreSQLConnector,
 }
 
+# Lazy-register BigQuery only when google-cloud-bigquery is installed
+try:
+    from app.connectors.bigquery.connector import BigQueryConnector
+
+    _CONNECTOR_CLASSES[ConnectorType.BIGQUERY] = BigQueryConnector
+except ImportError:
+    pass
+
 # Cache of active connector instances by connection ID
 _active_connectors: dict[str, BaseConnector] = {}
 
