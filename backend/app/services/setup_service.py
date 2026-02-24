@@ -2,9 +2,10 @@
 Auto-setup service for the IFRS 9 sample database.
 
 On startup, this service:
-1. Creates a connection to the sample DB (if not already present)
-2. Introspects the schema (if not already done)
-3. Seeds glossary terms, metrics, and dictionary entries (if empty)
+1. Ensures vector column dimensions match EMBEDDING_DIMENSION setting
+2. Creates a connection to the sample DB (if not already present)
+3. Introspects the schema (if not already done)
+4. Seeds glossary terms, metrics, and dictionary entries (if empty)
 
 All operations are idempotent — safe to run on every restart.
 """
@@ -13,7 +14,7 @@ import asyncio
 import logging
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
@@ -26,6 +27,68 @@ from app.db.session import async_session_factory
 from app.services import connection_service, schema_service
 
 logger = logging.getLogger("uvicorn.error")
+
+# ---------------------------------------------------------------------------
+# Vector dimension check — runs on every startup
+# ---------------------------------------------------------------------------
+EMBEDDING_COLUMNS = [
+    ("cached_tables", "description_embedding"),
+    ("cached_columns", "description_embedding"),
+    ("glossary_terms", "term_embedding"),
+    ("metric_definitions", "metric_embedding"),
+    ("sample_queries", "question_embedding"),
+]
+
+
+async def ensure_embedding_dimensions() -> None:
+    """Check if vector columns match EMBEDDING_DIMENSION and resize if needed.
+
+    Alembic migration 002 only runs once. If the user switches providers
+    (e.g. OpenAI 1536 → Ollama 768) after the migration has already run,
+    the columns keep the old dimension. This function detects the mismatch
+    and fixes it at startup — nulling stale embeddings so they regenerate.
+    """
+    target_dim = settings.embedding_dimension
+
+    async with async_session_factory() as db:
+        # Check the first embedding column's dimension as a proxy for all
+        result = await db.execute(text(
+            "SELECT atttypmod FROM pg_attribute "
+            "WHERE attrelid = 'cached_tables'::regclass "
+            "AND attname = 'description_embedding'"
+        ))
+        row = result.scalar_one_or_none()
+
+        if row is None:
+            # Column doesn't exist yet (first run before migrations)
+            return
+
+        current_dim = row  # pgvector stores dimension in atttypmod
+        if current_dim == target_dim:
+            return
+
+        logger.info(
+            "Embedding dimension mismatch: DB has %d, config wants %d. "
+            "Resizing columns and clearing stale embeddings...",
+            current_dim, target_dim,
+        )
+        for table, column in EMBEDDING_COLUMNS:
+            await db.execute(text(
+                f"UPDATE {table} SET {column} = NULL "
+                f"WHERE {column} IS NOT NULL"
+            ))
+            await db.execute(text(
+                f"ALTER TABLE {table} "
+                f"ALTER COLUMN {column} TYPE vector({target_dim}) "
+                f"USING {column}::vector({target_dim})"
+            ))
+        await db.commit()
+        logger.info(
+            "Embedding columns resized to %d dimensions. "
+            "Embeddings will regenerate in the background.",
+            target_dim,
+        )
+
 
 CONNECTION_NAME = "IFRS 9 Sample DB"
 
@@ -344,7 +407,11 @@ async def auto_setup_sample_db() -> None:
                     await _seed_dictionary(db, connection_id)
 
                     await db.commit()
-                    logger.info("Auto-setup: completed successfully!")
+                    logger.info(
+                        "Auto-setup: completed, launching background "
+                        "embedding generation"
+                    )
+                    launch_background_embeddings(connection_id)
                     return
                 except Exception:
                     await db.rollback()
@@ -464,3 +531,57 @@ async def _seed_dictionary(db, connection_id: uuid.UUID) -> None:
 
     await db.flush()
     logger.info("Auto-setup: seeded %d dictionary entries", total)
+
+
+async def _generate_embeddings_background(connection_id: uuid.UUID) -> None:
+    """Run embedding generation in the background with progress tracking."""
+    from app.services.embedding_service import (
+        count_items_needing_embeddings,
+        generate_embeddings_for_connection,
+    )
+    from app.services.embedding_progress import (
+        increment,
+        mark_completed,
+        mark_failed,
+        start_tracking,
+    )
+
+    cid = str(connection_id)
+    async with async_session_factory() as db:
+        try:
+            total = await count_items_needing_embeddings(db, connection_id)
+            if total == 0:
+                logger.info("Background embeddings: nothing to generate")
+                return
+
+            start_tracking(cid, total)
+            logger.info(
+                "Background embeddings: generating %d embeddings...", total
+            )
+
+            count = await generate_embeddings_for_connection(
+                db, connection_id, on_progress=lambda: increment(cid)
+            )
+            await db.commit()
+
+            mark_completed(cid)
+            logger.info("Background embeddings: done (%d generated)", count)
+        except Exception as e:
+            await db.rollback()
+            mark_failed(cid, str(e))
+            logger.warning(
+                "Background embeddings: failed (%s) — keyword-only matching "
+                "will be used until embeddings are generated",
+                e,
+            )
+
+
+def launch_background_embeddings(connection_id: uuid.UUID) -> None:
+    """Fire-and-forget background embedding generation."""
+    from app.services.embedding_progress import register_task
+
+    task = asyncio.create_task(
+        _generate_embeddings_background(connection_id),
+        name=f"embed-{connection_id}",
+    )
+    register_task(str(connection_id), task)

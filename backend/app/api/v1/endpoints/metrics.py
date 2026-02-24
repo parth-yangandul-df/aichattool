@@ -8,6 +8,7 @@ from app.api.v1.schemas.metric import MetricCreate, MetricResponse, MetricUpdate
 from app.core.exceptions import NotFoundError
 from app.db.models.metric import MetricDefinition
 from app.db.session import get_db
+from app.services.embedding_service import embed_metric
 
 router = APIRouter(tags=["metrics"])
 
@@ -44,6 +45,10 @@ async def create_metric(
     )
     db.add(metric)
     await db.flush()
+    try:
+        metric.metric_embedding = await embed_metric(metric)
+    except Exception:
+        pass
     return metric
 
 
@@ -80,6 +85,10 @@ async def update_metric(
         setattr(metric, key, value)
 
     await db.flush()
+    try:
+        metric.metric_embedding = await embed_metric(metric)
+    except Exception:
+        pass
     return metric
 
 

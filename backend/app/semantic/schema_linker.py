@@ -142,6 +142,7 @@ async def _vector_search_tables(
             "Check EMBEDDING_DIMENSION matches your model. Falling back to keyword search.",
             exc_info=True,
         )
+        await db.rollback()
         return []
     return [(row[0], row[1]) for row in result.all()]
 

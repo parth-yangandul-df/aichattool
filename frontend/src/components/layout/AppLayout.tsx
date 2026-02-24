@@ -8,6 +8,7 @@ import {
   IconHistory,
 } from '@tabler/icons-react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { EmbeddingStatusBanner } from '../common/EmbeddingStatusBanner';
 
 const NAV_ITEMS = [
   { label: 'Query', path: '/query', icon: IconMessageQuestion },
@@ -54,6 +55,7 @@ export function AppLayout() {
       </AppShell.Navbar>
 
       <AppShell.Main>
+        <EmbeddingStatusBanner />
         <Outlet />
       </AppShell.Main>
     </AppShell>

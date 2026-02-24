@@ -1,6 +1,7 @@
 import hashlib
+from collections.abc import Callable
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.glossary import GlossaryTerm
@@ -64,7 +65,63 @@ async def embed_sample_query(query: SampleQuery) -> list[float]:
     return await embed_text(query.natural_language)
 
 
-async def generate_embeddings_for_connection(db: AsyncSession, connection_id) -> int:
+async def count_items_needing_embeddings(
+    db: AsyncSession, connection_id
+) -> int:
+    """Count all metadata items that need embedding generation."""
+    total = 0
+
+    result = await db.execute(
+        select(func.count()).select_from(CachedTable).where(
+            CachedTable.connection_id == connection_id,
+            CachedTable.description_embedding.is_(None),
+        )
+    )
+    total += result.scalar_one()
+
+    result = await db.execute(
+        select(func.count())
+        .select_from(CachedColumn)
+        .join(CachedTable, CachedColumn.table_id == CachedTable.id)
+        .where(
+            CachedTable.connection_id == connection_id,
+            CachedColumn.description_embedding.is_(None),
+        )
+    )
+    total += result.scalar_one()
+
+    result = await db.execute(
+        select(func.count()).select_from(GlossaryTerm).where(
+            GlossaryTerm.connection_id == connection_id,
+            GlossaryTerm.term_embedding.is_(None),
+        )
+    )
+    total += result.scalar_one()
+
+    result = await db.execute(
+        select(func.count()).select_from(MetricDefinition).where(
+            MetricDefinition.connection_id == connection_id,
+            MetricDefinition.metric_embedding.is_(None),
+        )
+    )
+    total += result.scalar_one()
+
+    result = await db.execute(
+        select(func.count()).select_from(SampleQuery).where(
+            SampleQuery.connection_id == connection_id,
+            SampleQuery.question_embedding.is_(None),
+        )
+    )
+    total += result.scalar_one()
+
+    return total
+
+
+async def generate_embeddings_for_connection(
+    db: AsyncSession,
+    connection_id,
+    on_progress: Callable[[], None] | None = None,
+) -> int:
     """Generate embeddings for all metadata of a connection. Returns count of items embedded."""
     count = 0
 
@@ -79,6 +136,8 @@ async def generate_embeddings_for_connection(db: AsyncSession, connection_id) ->
     for table in tables:
         table.description_embedding = await embed_table(table)
         count += 1
+        if on_progress:
+            on_progress()
 
         # Columns of this table
         col_result = await db.execute(
@@ -91,6 +150,8 @@ async def generate_embeddings_for_connection(db: AsyncSession, connection_id) ->
         for col in columns:
             col.description_embedding = await embed_column(col, table.table_name)
             count += 1
+            if on_progress:
+                on_progress()
 
     # Glossary terms
     result = await db.execute(
@@ -102,6 +163,8 @@ async def generate_embeddings_for_connection(db: AsyncSession, connection_id) ->
     for term in result.scalars().all():
         term.term_embedding = await embed_glossary_term(term)
         count += 1
+        if on_progress:
+            on_progress()
 
     # Metrics
     result = await db.execute(
@@ -113,6 +176,8 @@ async def generate_embeddings_for_connection(db: AsyncSession, connection_id) ->
     for metric in result.scalars().all():
         metric.metric_embedding = await embed_metric(metric)
         count += 1
+        if on_progress:
+            on_progress()
 
     # Sample queries
     result = await db.execute(
@@ -124,6 +189,8 @@ async def generate_embeddings_for_connection(db: AsyncSession, connection_id) ->
     for sq in result.scalars().all():
         sq.question_embedding = await embed_sample_query(sq)
         count += 1
+        if on_progress:
+            on_progress()
 
     await db.flush()
     return count

@@ -1,0 +1,227 @@
+Debug Embeddings — Quick Reference
+====================================
+
+DATABASE ACCESS
+================
+
+App database (metadata, embeddings, glossary, etc.):
+  docker compose exec app-db psql -U querywise -d querywise
+
+Sample database (IFRS 9 banking data):
+  docker compose exec sample-db psql -U sample -d sampledb
+
+Get the connection ID (needed for curl commands):
+  docker compose exec app-db psql -U querywise -d querywise -t -A \
+    -c "SELECT id FROM database_connections LIMIT 1;"
+
+
+CURL COMMANDS — Test embedding generation
+===========================================
+
+# Set your connection ID first:
+CONNECTION_ID=$(docker compose exec app-db psql -U querywise -d querywise -t -A \
+  -c "SELECT id FROM database_connections LIMIT 1;")
+
+# Create a glossary term (should get embedding inline):
+curl -s -X POST "http://localhost:8000/api/v1/connections/${CONNECTION_ID}/glossary" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "term": "Test Term",
+    "definition": "A test definition for debugging embeddings",
+    "sql_expression": "test_col = true"
+  }' | python3 -m json.tool
+
+# Create a metric (should get embedding inline):
+curl -s -X POST "http://localhost:8000/api/v1/connections/${CONNECTION_ID}/metrics" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "metric_name": "test_metric",
+    "display_name": "Test Metric",
+    "description": "A test metric for debugging",
+    "sql_template": "SELECT count(*) FROM exposures",
+    "related_tables": ["exposures"]
+  }' | python3 -m json.tool
+
+# Create a sample query (should get embedding inline):
+curl -s -X POST "http://localhost:8000/api/v1/connections/${CONNECTION_ID}/sample-queries" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "natural_language": "What is the total ECL provision?",
+    "sql_query": "SELECT SUM(ecl_amount) FROM ecl_provisions",
+    "is_validated": true
+  }' | python3 -m json.tool
+
+# Trigger schema introspection (re-embeds all tables/columns):
+curl -s -X POST "http://localhost:8000/api/v1/connections/${CONNECTION_ID}/introspect" \
+  | python3 -m json.tool
+
+# List glossary terms:
+curl -s "http://localhost:8000/api/v1/connections/${CONNECTION_ID}/glossary" \
+  | python3 -m json.tool
+
+# Delete a glossary term (replace TERM_ID):
+curl -s -X DELETE "http://localhost:8000/api/v1/connections/${CONNECTION_ID}/glossary/TERM_ID"
+
+
+SQL QUERIES — Check embedding status
+======================================
+
+1. Check glossary term embeddings
+----------------------------------
+SELECT term,
+       CASE WHEN term_embedding IS NULL THEN 'NULL'
+            ELSE 'has embedding (' || array_length(term_embedding::real[], 1)::text || ' dims)'
+       END AS embedding_status,
+       created_at
+FROM glossary_terms
+ORDER BY created_at DESC;
+
+
+2. Check metric embeddings
+---------------------------
+SELECT display_name,
+       CASE WHEN metric_embedding IS NULL THEN 'NULL'
+            ELSE 'has embedding (' || array_length(metric_embedding::real[], 1)::text || ' dims)'
+       END AS embedding_status
+FROM metric_definitions
+ORDER BY display_name;
+
+
+3. Check table embeddings
+--------------------------
+SELECT table_name,
+       CASE WHEN description_embedding IS NULL THEN 'NULL'
+            ELSE 'has embedding (' || array_length(description_embedding::real[], 1)::text || ' dims)'
+       END AS embedding_status
+FROM cached_tables
+ORDER BY table_name;
+
+
+4. Check column embeddings
+---------------------------
+SELECT t.table_name, c.column_name,
+       CASE WHEN c.description_embedding IS NULL THEN 'NULL'
+            ELSE 'has embedding'
+       END AS embedding_status
+FROM cached_columns c
+JOIN cached_tables t ON c.table_id = t.id
+ORDER BY t.table_name, c.ordinal_position;
+
+
+5. Check sample query embeddings
+----------------------------------
+SELECT natural_language,
+       CASE WHEN question_embedding IS NULL THEN 'NULL'
+            ELSE 'has embedding (' || array_length(question_embedding::real[], 1)::text || ' dims)'
+       END AS embedding_status
+FROM sample_queries
+ORDER BY created_at DESC;
+
+
+6. Summary — count of NULL vs populated embeddings
+----------------------------------------------------
+SELECT 'glossary_terms' AS entity,
+       count(*) FILTER (WHERE term_embedding IS NOT NULL) AS has_embedding,
+       count(*) FILTER (WHERE term_embedding IS NULL) AS missing
+FROM glossary_terms
+UNION ALL
+SELECT 'metric_definitions',
+       count(*) FILTER (WHERE metric_embedding IS NOT NULL),
+       count(*) FILTER (WHERE metric_embedding IS NULL)
+FROM metric_definitions
+UNION ALL
+SELECT 'cached_tables',
+       count(*) FILTER (WHERE description_embedding IS NOT NULL),
+       count(*) FILTER (WHERE description_embedding IS NULL)
+FROM cached_tables
+UNION ALL
+SELECT 'cached_columns',
+       count(*) FILTER (WHERE description_embedding IS NOT NULL),
+       count(*) FILTER (WHERE description_embedding IS NULL)
+FROM cached_columns
+UNION ALL
+SELECT 'sample_queries',
+       count(*) FILTER (WHERE question_embedding IS NOT NULL),
+       count(*) FILTER (WHERE question_embedding IS NULL)
+FROM sample_queries;
+
+
+7. Nuke all embeddings (force re-generation on next startup)
+-------------------------------------------------------------
+UPDATE glossary_terms SET term_embedding = NULL;
+UPDATE metric_definitions SET metric_embedding = NULL;
+UPDATE cached_tables SET description_embedding = NULL;
+UPDATE cached_columns SET description_embedding = NULL;
+UPDATE sample_queries SET question_embedding = NULL;
+
+
+PROGRESS TRACKING — Background embedding status
+==================================================
+
+# Check live progress via API:
+curl -s http://localhost:8000/api/v1/embeddings/status | python3 -m json.tool
+
+# Response example (in progress):
+# {
+#   "tasks": [{
+#     "connection_id": "9d4f4dc3-...",
+#     "status": "running",
+#     "total": 79,
+#     "completed": 36,
+#     "error": null
+#   }]
+# }
+
+# Possible status values: pending, running, completed, failed
+
+# Frontend: a blue progress banner appears automatically at the top of
+# every page while embeddings are generating. It shows "Generating
+# embeddings for semantic search... X / Y" with an animated progress bar.
+# The banner auto-hides when complete and can be dismissed with the X button.
+# Polling interval: every 2 seconds while active, stops when all tasks complete.
+
+
+DIMENSION CHECK — Switching embedding providers
+=================================================
+
+# On every startup, ensure_embedding_dimensions() in setup_service.py checks
+# if the vector column dimension matches EMBEDDING_DIMENSION from .env.
+# If mismatched (e.g. switched from OpenAI 1536 → Ollama 768), it:
+#   1. Nulls all stale embeddings
+#   2. ALTERs all 5 vector columns to the new dimension
+#   3. Embeddings regenerate in the background on next auto-setup
+
+# Check current column dimension:
+SELECT attname, atttypmod AS dimension, format_type(atttypid, atttypmod) AS type
+FROM pg_attribute
+WHERE attrelid = 'cached_tables'::regclass
+AND attname = 'description_embedding';
+
+# If you see "Embedding dimension mismatch" in startup logs, it auto-fixed.
+# If you DON'T see it, dimensions already match — nothing to do.
+
+# Common mistake when switching providers:
+#   You must change BOTH settings in .env:
+#     DEFAULT_LLM_PROVIDER=ollama
+#     EMBEDDING_DIMENSION=768
+#   Forgetting EMBEDDING_DIMENSION causes 1536-dim columns with 768-dim embeddings.
+
+
+When embeddings are generated
+==============================
+- On startup: background asyncio task runs after auto-setup seeds (non-blocking)
+- On introspect: background task launched after schema introspection (non-blocking)
+- On CRUD: each create/update of glossary, metric, or sample query embeds inline
+- Graceful degradation: if embedding model is unavailable, records stay NULL and keyword-only matching is used
+- Vector search fallback: if dimension mismatch at query time, schema_linker rolls back
+  the DB session and falls back to keyword ILIKE search (no 500 error)
+
+Key files:
+- Dimension check: backend/app/services/setup_service.py (ensure_embedding_dimensions)
+- Progress tracker: backend/app/services/embedding_progress.py
+- Background launcher: backend/app/services/setup_service.py (launch_background_embeddings)
+- Embedding service: backend/app/services/embedding_service.py
+- Schema linker: backend/app/semantic/schema_linker.py (hybrid vector + keyword search)
+- Status endpoint: backend/app/api/v1/endpoints/health.py (GET /embeddings/status)
+- Frontend banner: frontend/src/components/common/EmbeddingStatusBanner.tsx
+- Polling hook: frontend/src/hooks/useEmbeddingStatus.ts

@@ -12,6 +12,7 @@ from app.api.v1.schemas.glossary import (
 from app.core.exceptions import NotFoundError
 from app.db.models.glossary import GlossaryTerm
 from app.db.session import get_db
+from app.services.embedding_service import embed_glossary_term
 
 router = APIRouter(tags=["glossary"])
 
@@ -53,6 +54,10 @@ async def create_glossary_term(
     )
     db.add(term)
     await db.flush()
+    try:
+        term.term_embedding = await embed_glossary_term(term)
+    except Exception:
+        pass
     return term
 
 
@@ -89,6 +94,10 @@ async def update_glossary_term(
         setattr(term, key, value)
 
     await db.flush()
+    try:
+        term.term_embedding = await embed_glossary_term(term)
+    except Exception:
+        pass
     return term
 
 
