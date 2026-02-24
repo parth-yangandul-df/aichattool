@@ -9,6 +9,7 @@ import {
   Badge,
   Modal,
   TextInput,
+  Textarea,
   NumberInput,
   Select,
   ActionIcon,
@@ -233,6 +234,20 @@ function SchemaExplorer({ connectionId }: { connectionId: string }) {
   );
 }
 
+interface BigQueryFormValues {
+  name: string;
+  connector_type: string;
+  // PostgreSQL fields
+  connection_string: string;
+  // BigQuery fields
+  bq_project_id: string;
+  bq_credentials_json: string;
+  // Shared
+  default_schema: string;
+  max_query_timeout_seconds: number;
+  max_rows: number;
+}
+
 function AddConnectionModal({
   opened,
   onClose,
@@ -242,24 +257,66 @@ function AddConnectionModal({
 }) {
   const createMutation = useCreateConnection();
 
-  const form = useForm<ConnectionCreate>({
+  const form = useForm<BigQueryFormValues>({
     initialValues: {
       name: '',
       connector_type: 'postgresql',
       connection_string: '',
+      bq_project_id: '',
+      bq_credentials_json: '',
       default_schema: 'public',
       max_query_timeout_seconds: 30,
       max_rows: 1000,
     },
     validate: {
       name: (v) => (v.trim() ? null : 'Name is required'),
-      connection_string: (v) =>
-        v.trim() ? null : 'Connection string is required',
+      connection_string: (v, values) =>
+        values.connector_type !== 'bigquery' && !v.trim()
+          ? 'Connection string is required'
+          : null,
+      bq_project_id: (v, values) =>
+        values.connector_type === 'bigquery' && !v.trim()
+          ? 'Project ID is required'
+          : null,
+      bq_credentials_json: (v, values) => {
+        if (values.connector_type !== 'bigquery') return null;
+        if (!v.trim()) return 'Service account JSON is required';
+        try {
+          JSON.parse(v);
+          return null;
+        } catch {
+          return 'Invalid JSON';
+        }
+      },
     },
   });
 
-  const handleSubmit = (values: ConnectionCreate) => {
-    createMutation.mutate(values, {
+  const isBigQuery = form.values.connector_type === 'bigquery';
+
+  const handleSubmit = (values: BigQueryFormValues) => {
+    let connectionString = values.connection_string;
+    let defaultSchema = values.default_schema;
+
+    if (values.connector_type === 'bigquery') {
+      connectionString = JSON.stringify({
+        project_id: values.bq_project_id,
+        credentials_json: JSON.parse(values.bq_credentials_json),
+      });
+      if (!defaultSchema || defaultSchema === 'public') {
+        defaultSchema = '';
+      }
+    }
+
+    const payload: ConnectionCreate = {
+      name: values.name,
+      connector_type: values.connector_type,
+      connection_string: connectionString,
+      default_schema: defaultSchema,
+      max_query_timeout_seconds: values.max_query_timeout_seconds,
+      max_rows: values.max_rows,
+    };
+
+    createMutation.mutate(payload, {
       onSuccess: () => {
         notifications.show({
           title: 'Connection created',
@@ -290,17 +347,44 @@ function AddConnectionModal({
           />
           <Select
             label="Connector type"
-            data={[{ value: 'postgresql', label: 'PostgreSQL' }]}
+            data={[
+              { value: 'postgresql', label: 'PostgreSQL' },
+              { value: 'bigquery', label: 'BigQuery' },
+            ]}
             {...form.getInputProps('connector_type')}
           />
+
+          {isBigQuery ? (
+            <>
+              <TextInput
+                label="Project ID"
+                placeholder="my-gcp-project"
+                required
+                {...form.getInputProps('bq_project_id')}
+              />
+              <Textarea
+                label="Service account JSON"
+                placeholder="Paste the contents of your service account key file"
+                required
+                autosize
+                minRows={4}
+                maxRows={10}
+                styles={{ input: { fontFamily: 'monospace', fontSize: 12 } }}
+                {...form.getInputProps('bq_credentials_json')}
+              />
+            </>
+          ) : (
+            <TextInput
+              label="Connection string"
+              placeholder="postgresql://user:pass@host:5432/dbname"
+              required
+              {...form.getInputProps('connection_string')}
+            />
+          )}
+
           <TextInput
-            label="Connection string"
-            placeholder="postgresql://user:pass@host:5432/dbname"
-            required
-            {...form.getInputProps('connection_string')}
-          />
-          <TextInput
-            label="Default schema"
+            label={isBigQuery ? 'Dataset' : 'Default schema'}
+            placeholder={isBigQuery ? 'my_dataset' : 'public'}
             {...form.getInputProps('default_schema')}
           />
           <Group grow>
