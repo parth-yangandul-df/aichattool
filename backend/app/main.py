@@ -14,7 +14,11 @@ logger = logging.getLogger("querywise")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup: ensure vector columns match configured dimension
+    from app.services.setup_service import ensure_embedding_dimensions
+
+    await ensure_embedding_dimensions()
+
     if settings.auto_setup_sample_db:
         from app.services.setup_service import auto_setup_sample_db
 

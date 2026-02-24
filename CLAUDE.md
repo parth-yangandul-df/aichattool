@@ -31,7 +31,11 @@ python backend/scripts/seed_ifrs9_metadata.py
 
 The sample-db contains an **IFRS 9 banking schema** with 6 tables: `counterparties`, `facilities`, `exposures`, `ecl_provisions`, `collateral`, `staging_history`. Connection string (from Docker): `postgresql://sample:sample_dev@sample-db:5432/sampledb`.
 
-**Auto-setup** (`AUTO_SETUP_SAMPLE_DB=true`, default): On first `docker compose up`, the backend automatically creates the connection, introspects the schema, and seeds all metadata (10 glossary terms, 8 metrics, 43 dictionary entries across 12 columns). Logic in `app/services/setup_service.py`, called from `main.py` lifespan hook. Idempotent — safe to restart.
+**Auto-setup** (`AUTO_SETUP_SAMPLE_DB=true`, default): On first `docker compose up`, the backend automatically creates the connection, introspects the schema, seeds all metadata (10 glossary terms, 8 metrics, 43 dictionary entries across 12 columns), and launches background embedding generation. Logic in `app/services/setup_service.py`, called from `main.py` lifespan hook. Idempotent — safe to restart.
+
+**Startup sequence** (in `main.py` lifespan):
+1. `ensure_embedding_dimensions()` — checks vector column dimensions match `EMBEDDING_DIMENSION`, resizes + nulls stale embeddings if mismatched (handles provider switching)
+2. `auto_setup_sample_db()` — connection, introspection, seeds, then launches background embedding generation (non-blocking)
 
 For manual seeding (if auto-setup disabled): `python backend/scripts/seed_ifrs9_metadata.py`
 
@@ -160,11 +164,19 @@ docker compose exec ollama ollama pull nomic-embed-text
 
 ### Embedding dimension
 
-`nomic-embed-text` produces **768**-dimension vectors. Set `EMBEDDING_DIMENSION=768` in `.env`. Migration `002_configurable_embedding_dim` auto-runs on startup — it resizes all vector columns and nulls existing embeddings (they regenerate on first use).
+`nomic-embed-text` produces **768**-dimension vectors. Set `EMBEDDING_DIMENSION=768` in `.env`. Migration `002_configurable_embedding_dim` handles initial column creation. On subsequent provider switches, `ensure_embedding_dimensions()` (in `setup_service.py`, called from `main.py` lifespan) detects dimension mismatches at startup, resizes all vector columns, and nulls stale embeddings so they regenerate in the background.
+
+### Embedding generation
+
+Embeddings are generated in **background asyncio tasks** (non-blocking):
+- **On startup:** after auto-setup seeds, `launch_background_embeddings()` fires a background task
+- **On introspect:** background task launched after schema introspection
+- **On CRUD:** each create/update of glossary term, metric, or sample query embeds inline
+- **Progress tracking:** in-memory tracker (`embedding_progress.py`), exposed at `GET /api/v1/embeddings/status`, displayed as a frontend progress banner (auto-polls every 2s, auto-hides when complete)
 
 ### Graceful degradation
 
-If the embedding model is unavailable (not pulled, or Ollama is down), the query pipeline falls back to keyword-only context matching instead of crashing. Embedding-based search resumes automatically once the model is available.
+If the embedding model is unavailable (not pulled, or Ollama is down), the query pipeline falls back to keyword-only context matching instead of crashing. Vector search failures in `schema_linker.py` trigger a session rollback and keyword fallback. Embedding-based search resumes automatically once the model is available.
 
 ### Key implementation details
 

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError
 from app.db.models.sample_query import SampleQuery
 from app.db.session import get_db
+from app.services.embedding_service import embed_sample_query
 
 router = APIRouter(tags=["sample_queries"])
 
@@ -71,6 +72,10 @@ async def create_sample_query(
     sq = SampleQuery(connection_id=connection_id, **body.model_dump())
     db.add(sq)
     await db.flush()
+    try:
+        sq.question_embedding = await embed_sample_query(sq)
+    except Exception:
+        pass
     return sq
 
 
@@ -90,6 +95,10 @@ async def update_sample_query(
     for key, value in body.model_dump(exclude_none=True).items():
         setattr(sq, key, value)
     await db.flush()
+    try:
+        sq.question_embedding = await embed_sample_query(sq)
+    except Exception:
+        pass
     return sq
 
 

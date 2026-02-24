@@ -16,7 +16,7 @@ class OpenAIProvider(BaseLLMProvider):
     provider_type = LLMProviderType.OPENAI
 
     def __init__(self, api_key: str | None = None):
-        self._client = openai.AsyncOpenAI(api_key=api_key)
+        self._client = openai.AsyncOpenAI(api_key=api_key, timeout=30.0)
 
     async def complete(
         self,

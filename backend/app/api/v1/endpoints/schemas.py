@@ -12,6 +12,7 @@ from app.api.v1.schemas.schema import (
 )
 from app.db.session import get_db
 from app.services import schema_service
+from app.services.setup_service import launch_background_embeddings
 
 router = APIRouter(tags=["schemas"])
 
@@ -25,6 +26,7 @@ async def introspect_connection(
     db: AsyncSession = Depends(get_db),
 ):
     result = await schema_service.introspect_and_cache(db, connection_id)
+    launch_background_embeddings(connection_id)
     return IntrospectionResult(**result)
 
 
