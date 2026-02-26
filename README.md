@@ -2,6 +2,8 @@
 
 A full-stack application that translates natural language questions into SQL queries. It uses a **semantic metadata layer** — business glossary, metrics definitions, data dictionary, and schema context — to give LLMs the context they need to generate accurate SQL against your databases.
 
+[![QueryWise Demo](https://img.youtube.com/vi/nCq6MPodI5I/maxresdefault.jpg)](https://www.youtube.com/watch?v=nCq6MPodI5I)
+
 ```
 ┌─────────────────────────────────────────────┐
 │        FRONTEND (React + TypeScript)        │
