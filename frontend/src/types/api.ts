@@ -10,6 +10,8 @@ export interface Connection {
   last_introspected_at: string | null;
   created_at: string;
   updated_at: string;
+  /** SQL Server only: explicit whitelist of "schema.table" names. Null = no filter. */
+  allowed_table_names: string[] | null;
 }
 
 export interface ConnectionCreate {
@@ -19,6 +21,13 @@ export interface ConnectionCreate {
   default_schema: string;
   max_query_timeout_seconds: number;
   max_rows: number;
+  allowed_table_names?: string[] | null;
+}
+
+/** A table that is available to be added to the SQL Server whitelist. */
+export interface AvailableTable {
+  schema_name: string;
+  table_name: string;
 }
 
 export interface TableSummary {

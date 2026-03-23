@@ -27,7 +27,8 @@ A full-stack application that translates natural language questions into SQL que
 │                 │                            │
 │  ┌──────────────▼──────────────────────┐    │
 │  │  CONNECTOR LAYER (plugin system)    │    │
-│  │  BaseConnector → PG, BQ, Databricks│   │
+│  │  BaseConnector → PG, SQL Server,    │    │
+│  │  BigQuery, Databricks               │    │
 │  └─────────────────────────────────────┘    │
 └─────────────────────────────────────────────┘
 ```
@@ -41,7 +42,7 @@ A full-stack application that translates natural language questions into SQL que
 - **Multi-provider LLM** — Anthropic Claude, OpenAI, Ollama (provider-agnostic design)
 - **4 specialized LLM agents** — Query Composer, SQL Validator, Result Interpreter, Error Handler
 - **Intelligent routing** — routes simple/moderate/complex queries to appropriate models
-- **Plugin connector system** — PostgreSQL, BigQuery, and Databricks built-in, extensible to MySQL, Snowflake, and more
+- **Plugin connector system** — PostgreSQL, SQL Server, BigQuery, and Databricks built-in, extensible to MySQL, Snowflake, and more
 - **Security by default** — read-only query execution, SQL blocklist, encrypted connection strings
 - **Query history** — full execution log with favorites, retry counts, token usage
 - **Schema introspection** — auto-discovers tables, columns, types, relationships from target databases
@@ -117,6 +118,25 @@ The service account needs the **BigQuery User** role (or equivalent) to run quer
 
 Works with both **Unity Catalog** (full INFORMATION_SCHEMA introspection including PKs/FKs) and **Hive metastore** (falls back to SHOW/DESCRIBE commands). Credentials are encrypted at rest.
 
+### Connecting to SQL Server
+
+1. Select **SQL Server** as the connector type in the Add Connection form
+2. Enter an ODBC-style connection string, for example:
+
+```text
+SERVER=localhost,1433;DATABASE=master;UID=sa;PWD=your-password;Encrypt=yes;TrustServerCertificate=yes;
+```
+
+3. Set the **Default schema** to `dbo` unless your tables live elsewhere
+4. Click Create, then Test and Introspect
+
+Local development requirements:
+
+- Install the backend SQL Server extra: `pip install -e ".[llm,dev,sqlserver]"`
+- Install a Windows ODBC driver: **ODBC Driver 18 for SQL Server** or **ODBC Driver 17 for SQL Server**
+
+The backend auto-injects the best available SQL Server ODBC driver if the connection string omits `DRIVER=...`.
+
 ### First Steps
 
 1. Open http://localhost:5173
@@ -176,6 +196,9 @@ source .venv/bin/activate
 
 # Install dependencies
 pip install -e ".[llm,dev]"
+
+# If you want to connect to SQL Server locally
+pip install -e ".[llm,dev,sqlserver]"
 
 # Start PostgreSQL with pgvector (must be running on localhost:5432)
 # Run migrations

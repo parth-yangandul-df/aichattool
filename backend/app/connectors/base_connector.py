@@ -10,6 +10,7 @@ class ConnectorType(str, Enum):
     SNOWFLAKE = "snowflake"
     BIGQUERY = "bigquery"
     DATABRICKS = "databricks"
+    SQLSERVER = "sqlserver"
 
 
 @dataclass

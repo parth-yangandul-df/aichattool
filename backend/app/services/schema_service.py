@@ -1,23 +1,83 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.connectors.base_connector import ConnectorType, TableInfo
 from app.connectors.connector_registry import get_or_create_connector
 from app.core.exceptions import NotFoundError
 from app.db.models.schema_cache import CachedColumn, CachedRelationship, CachedTable
 from app.services.connection_service import get_connection, get_decrypted_connection_string
+
+# -------------------------------------------------------------------------
+# SQL Server auto-exclusion rules (applied before whitelist check)
+# -------------------------------------------------------------------------
+_SQLSERVER_DBO_SCHEMA = "dbo"
+
+_SQLSERVER_EXCLUDE_PREFIXES = ("ts_",)          # case-insensitive
+_SQLSERVER_EXCLUDE_SUBSTRINGS = ("backup", "bakup")  # case-insensitive
+
+
+def _is_sqlserver_auto_excluded(table_name: str) -> bool:
+    """Return True if the table should be silently dropped for SQL Server connections."""
+    lower = table_name.lower()
+    for prefix in _SQLSERVER_EXCLUDE_PREFIXES:
+        if lower.startswith(prefix):
+            return True
+    for sub in _SQLSERVER_EXCLUDE_SUBSTRINGS:
+        if sub in lower:
+            return True
+    return False
+
+
+def apply_sqlserver_filters(
+    tables: list[TableInfo],
+    allowed_table_names: list[str] | None,
+) -> list[TableInfo]:
+    """Apply SQL Server-specific filtering rules to a list of TableInfo objects.
+
+    Rules (in order):
+      1. Keep only tables in the ``dbo`` schema.
+      2. Auto-exclude tables matching the built-in patterns (TS_*, *backup*, *bakup*).
+      3. If ``allowed_table_names`` is non-empty, restrict to that exact whitelist.
+
+    This function is pure (no DB/IO) so it can be reused by both introspect_and_cache
+    and the available-tables endpoint.
+    """
+    # Step 1: dbo only
+    result = [t for t in tables if t.schema_name.lower() == _SQLSERVER_DBO_SCHEMA]
+
+    # Step 2: auto-exclusion
+    result = [t for t in result if not _is_sqlserver_auto_excluded(t.table_name)]
+
+    # Step 3: whitelist (only applies when non-empty)
+    if allowed_table_names:
+        whitelist = {name.lower() for name in allowed_table_names}
+        result = [
+            t for t in result
+            if f"{t.schema_name}.{t.table_name}".lower() in whitelist
+        ]
+
+    return result
 
 
 async def introspect_and_cache(
     db: AsyncSession,
     connection_id: uuid.UUID,
 ) -> dict[str, int]:
-    """Introspect a target database and cache the schema metadata."""
+    """Introspect a target database and cache the schema metadata.
+
+    For SQL Server connections this applies additional filtering:
+      - Only the ``dbo`` schema is introspected.
+      - Tables matching auto-exclusion patterns (TS_*, *backup*, *bakup*) are skipped.
+      - If the connection has a non-empty ``allowed_table_names`` whitelist, only those
+        tables are cached.
+    """
     conn = await get_connection(db, connection_id)
     connection_string = get_decrypted_connection_string(conn)
+    is_sqlserver = conn.connector_type == ConnectorType.SQLSERVER
 
     connector = await get_or_create_connector(
         str(connection_id), conn.connector_type, connection_string
@@ -32,7 +92,13 @@ async def introspect_and_cache(
     )
     await db.flush()
 
-    schemas = await connector.introspect_schemas()
+    # For SQL Server: only introspect dbo — no need to call introspect_schemas() at all.
+    # For every other connector: use the original full-schema discovery.
+    if is_sqlserver:
+        schemas = [_SQLSERVER_DBO_SCHEMA]
+    else:
+        schemas = await connector.introspect_schemas()
+
     total_tables = 0
     total_columns = 0
     total_relationships = 0
@@ -41,9 +107,17 @@ async def introspect_and_cache(
     table_map: dict[tuple[str, str], CachedTable] = {}
 
     for schema_name in schemas:
-        tables = await connector.introspect_tables(schema_name)
+        raw_tables = await connector.introspect_tables(schema_name)
 
-        for table_info in tables:
+        # Apply SQL Server filters (dbo-only, auto-exclusion, whitelist)
+        if is_sqlserver:
+            tables_to_cache = apply_sqlserver_filters(
+                raw_tables, conn.allowed_table_names
+            )
+        else:
+            tables_to_cache = raw_tables
+
+        for table_info in tables_to_cache:
             cached_table = CachedTable(
                 connection_id=connection_id,
                 schema_name=table_info.schema_name,
@@ -74,10 +148,18 @@ async def introspect_and_cache(
 
     await db.flush()
 
-    # Now process foreign keys
+    # Now process foreign keys (only for tables that made it through the filter)
     for schema_name in schemas:
-        tables = await connector.introspect_tables(schema_name)
-        for table_info in tables:
+        raw_tables = await connector.introspect_tables(schema_name)
+
+        if is_sqlserver:
+            tables_to_process = apply_sqlserver_filters(
+                raw_tables, conn.allowed_table_names
+            )
+        else:
+            tables_to_process = raw_tables
+
+        for table_info in tables_to_process:
             source_table = table_map.get((schema_name, table_info.table_name))
             if not source_table:
                 continue
@@ -99,7 +181,7 @@ async def introspect_and_cache(
                 total_relationships += 1
 
     # Update last_introspected_at
-    conn.last_introspected_at = datetime.now(timezone.utc)
+    conn.last_introspected_at = datetime.now(UTC)
     await db.flush()
 
     return {
@@ -107,6 +189,34 @@ async def introspect_and_cache(
         "columns_found": total_columns,
         "relationships_found": total_relationships,
     }
+
+
+async def get_available_tables_for_sqlserver(
+    db: AsyncSession,
+    connection_id: uuid.UUID,
+) -> list[dict[str, str]]:
+    """Return all dbo tables (after auto-exclusion) from the live DB — does NOT update cache.
+
+    Used by the frontend Table Manager modal to show what tables are available to whitelist.
+    Returns a list of dicts: [{"schema_name": "dbo", "table_name": "Customers"}, ...]
+    """
+    conn = await get_connection(db, connection_id)
+    connection_string = get_decrypted_connection_string(conn)
+
+    connector = await get_or_create_connector(
+        str(connection_id), conn.connector_type, connection_string
+    )
+
+    raw_tables = await connector.introspect_tables(_SQLSERVER_DBO_SCHEMA)
+
+    # Apply only step 1 (dbo) and step 2 (auto-exclusion) — NOT the whitelist.
+    # The frontend needs the full candidate set so users can manage their whitelist.
+    filtered = [t for t in raw_tables if not _is_sqlserver_auto_excluded(t.table_name)]
+
+    return [
+        {"schema_name": t.schema_name, "table_name": t.table_name}
+        for t in filtered
+    ]
 
 
 async def get_tables(

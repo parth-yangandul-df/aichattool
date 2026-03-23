@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QueryWise — Platform Architecture</title>
+<title>Saras — Platform Architecture</title>
 <style>
 /* ===== RESET & BASE ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -242,7 +242,7 @@ pre code { background: none; color: inherit; padding: 0; }
 <!-- ===== SIDEBAR ===== -->
 <aside class="sidebar">
   <div class="sidebar-brand">
-    <h1>QueryWise</h1>
+    <h1>Saras</h1>
     <p>Platform Architecture</p>
   </div>
   <nav>
@@ -268,7 +268,7 @@ pre code { background: none; color: inherit; padding: 0; }
 
 <!-- HERO -->
 <header class="hero" id="top">
-  <h1>QueryWise Platform Architecture</h1>
+  <h1>Saras Platform Architecture</h1>
   <p>A full-stack application that translates natural language questions into SQL queries using a semantic metadata layer (glossary, metrics, dictionary, knowledge base), multi-agent LLM orchestration, and a pluggable database connector system.</p>
   <div class="badges">
     <span class="badge badge-purple">Python 3.12 &middot; FastAPI</span>
@@ -385,7 +385,7 @@ pre code { background: none; color: inherit; padding: 0; }
   <div class="card-grid card-grid-3">
     <div class="card">
       <h4>Header (56px)</h4>
-      <p>"QueryWise" branding + subtitle</p>
+      <p>"Saras" branding + subtitle</p>
     </div>
     <div class="card">
       <h4>Sidebar (220px)</h4>
@@ -1057,7 +1057,7 @@ connector = <span class="kw">await</span> <span class="fn">get_or_create_connect
 
   <h3>Quick Start</h3>
 <pre><code><span class="cmt"># 1. Clone and configure</span>
-git clone &lt;repo-url&gt; querywise && cd querywise
+git clone &lt;repo-url&gt; Saras && cd Saras
 cp .env.example .env
 <span class="cmt"># Edit .env — add ANTHROPIC_API_KEY and/or OPENAI_API_KEY</span>
 
@@ -1072,7 +1072,7 @@ docker compose up
   <table>
     <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
     <tbody>
-      <tr><td><code>DATABASE_URL</code></td><td><code>postgresql+asyncpg://querywise:querywise_dev@localhost:5432/querywise</code></td><td>App metadata DB</td></tr>
+      <tr><td><code>DATABASE_URL</code></td><td><code>postgresql+asyncpg://Saras:Saras_dev@localhost:5432/Saras</code></td><td>App metadata DB</td></tr>
       <tr><td><code>ENCRYPTION_KEY</code></td><td>dev key</td><td>Fernet key for connection strings</td></tr>
       <tr><td><code>DEFAULT_LLM_PROVIDER</code></td><td><code>anthropic</code></td><td>LLM provider</td></tr>
       <tr><td><code>DEFAULT_LLM_MODEL</code></td><td><code>claude-sonnet-4-20250514</code></td><td>Default model</td></tr>

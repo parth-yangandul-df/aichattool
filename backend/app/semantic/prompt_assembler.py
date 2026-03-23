@@ -47,6 +47,14 @@ def assemble_prompt(
 
         sections.append("\n".join(schema_lines))
 
+        # Column name quick-reference index — one line per table so the LLM can
+        # verify exact column names without re-scanning the full schema above.
+        index_lines = ["\n=== COLUMN NAME INDEX (use these exact names, no abbreviations) ==="]
+        for lt in tables:
+            col_names = ", ".join(col.column_name for col in lt.columns)
+            index_lines.append(f"  {lt.table.table_name}: {col_names}")
+        sections.append("\n".join(index_lines))
+
     # Relationships section
     if relationships:
         rel_lines = ["\n=== RELATIONSHIPS ==="]
@@ -118,8 +126,26 @@ def assemble_prompt(
     constraint_lines.append(f"- SQL dialect: {dialect}")
     constraint_lines.append("- Read-only: generate only SELECT statements")
     constraint_lines.append("- Never use INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE")
-    constraint_lines.append("- Limit results to 1000 rows unless user specifies otherwise")
     constraint_lines.append("- Use explicit column names, not SELECT *")
+    constraint_lines.append(
+        "- COLUMN NAMES: copy every column name verbatim from the COLUMN NAME INDEX above. "
+        "Never shorten, guess, or invent column names. "
+        "E.g. write BusinessUnitName not Name, ClientName not Name, ResourceName not Name."
+    )
+
+    if dialect == "sqlserver":
+        constraint_lines.append("- Use SELECT TOP N to limit rows, NOT LIMIT (T-SQL has no LIMIT clause)")
+        constraint_lines.append("- Quote identifiers with [square brackets], e.g. [column_name], [table_name]")
+        constraint_lines.append("- Use GETDATE() for current timestamp, not NOW()")
+        constraint_lines.append("- Use LEN() for string length, not LENGTH()")
+        constraint_lines.append("- Use ISNULL(expr, default) or COALESCE() for null handling")
+        constraint_lines.append("- Use + for string concatenation, not ||")
+        constraint_lines.append("- Do NOT use RETURNING clause (PostgreSQL-only)")
+        constraint_lines.append("- Do NOT use EXTRACT() — use YEAR(), MONTH(), DAY() functions instead")
+        constraint_lines.append("- Default row limit: SELECT TOP 1000 unless user specifies otherwise")
+    else:
+        constraint_lines.append("- Limit results to 1000 rows unless user specifies otherwise")
+
     sections.append("\n".join(constraint_lines))
 
     return "\n".join(sections)

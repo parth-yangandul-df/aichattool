@@ -20,9 +20,20 @@ class OllamaProvider(BaseLLMProvider):
     provider_type = LLMProviderType.OLLAMA
 
     def __init__(self, api_key: str | None = None):
-        # api_key is ignored — Ollama is local, no auth needed
         self._base_url = settings.ollama_base_url.rstrip("/")
-        self._client = httpx.AsyncClient(base_url=self._base_url, timeout=120.0)
+
+        # Use provided api_key, then fall back to settings, then no auth (local)
+        resolved_key = api_key or settings.ollama_api_key or None
+
+        headers = {}
+        if resolved_key:
+            headers["Authorization"] = f"Bearer {resolved_key}"
+
+        self._client = httpx.AsyncClient(
+            base_url=self._base_url,
+            timeout=120.0,
+            headers=headers,
+        )
 
     async def complete(
         self,

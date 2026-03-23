@@ -6,7 +6,7 @@ export const queryApi = {
     api.post<QueryResult>('/query', data).then(r => r.data),
 
   sqlOnly: (data: { connection_id: string; question: string }) =>
-    api.post<{ generated_sql: string; explanation: string }>('/query/sql-only', data).then(r => r.data),
+    api.post<{ generated_sql: string; explanation: string; confidence: number; tables_used: string[]; assumptions: string[] }>('/query/sql-only', data).then(r => r.data),
 
   executeSql: (data: { connection_id: string; sql: string; original_question?: string }) =>
     api.post<QueryResult>('/query/execute-sql', data).then(r => r.data),

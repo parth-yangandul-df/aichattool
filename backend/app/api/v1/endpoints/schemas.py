@@ -1,17 +1,20 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.schemas.schema import (
+    AvailableTableEntry,
     ColumnResponse,
     IntrospectionResult,
     RelationshipResponse,
     TableDetailResponse,
     TableResponse,
 )
+from app.connectors.base_connector import ConnectorType
 from app.db.session import get_db
 from app.services import schema_service
+from app.services.connection_service import get_connection
 from app.services.setup_service import launch_background_embeddings
 
 router = APIRouter(tags=["schemas"])
@@ -28,6 +31,30 @@ async def introspect_connection(
     result = await schema_service.introspect_and_cache(db, connection_id)
     launch_background_embeddings(connection_id)
     return IntrospectionResult(**result)
+
+
+@router.get(
+    "/connections/{connection_id}/available-tables",
+    response_model=list[AvailableTableEntry],
+    summary="List available dbo tables for SQL Server connections",
+    description=(
+        "Returns all tables in the dbo schema (after auto-exclusion of TS_* and backup tables) "
+        "directly from the live database — does NOT update the schema cache. "
+        "Only available for SQL Server connections. Used by the Table Manager UI."
+    ),
+)
+async def list_available_tables(
+    connection_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    conn = await get_connection(db, connection_id)
+    if conn.connector_type != ConnectorType.SQLSERVER:
+        raise HTTPException(
+            status_code=400,
+            detail="available-tables is only supported for SQL Server connections.",
+        )
+    tables = await schema_service.get_available_tables_for_sqlserver(db, connection_id)
+    return [AvailableTableEntry(**t) for t in tables]
 
 
 @router.get(

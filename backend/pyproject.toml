@@ -29,6 +29,9 @@ bigquery = [
 databricks = [
     "databricks-sql-connector[pyarrow]>=3.0",
 ]
+sqlserver = [
+    "aioodbc>=0.5",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",

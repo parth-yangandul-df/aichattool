@@ -17,6 +17,7 @@ import {
   CopyButton,
   ActionIcon,
   Tooltip,
+  Progress,
 } from '@mantine/core';
 import { IconSend, IconCopy, IconCheck, IconAlertCircle, IconPlayerPlay, IconX, IconEdit } from '@tabler/icons-react';
 import { useMutation } from '@tanstack/react-query';
@@ -25,11 +26,18 @@ import { queryApi } from '../api/queryApi';
 import { useConnections } from '../hooks/useConnections';
 import type { QueryResult } from '../types/api';
 
+interface SqlPreview {
+  sql: string;
+  explanation: string;
+  confidence: number;
+  tables_used: string[];
+}
+
 export function QueryPage() {
   const [question, setQuestion] = useState('');
   const [connectionId, setConnectionId] = useState<string | null>(null);
   const [result, setResult] = useState<QueryResult | null>(null);
-  const [sqlPreview, setSqlPreview] = useState<{ sql: string; explanation: string } | null>(null);
+  const [sqlPreview, setSqlPreview] = useState<SqlPreview | null>(null);
   const [editedSql, setEditedSql] = useState('');
 
   const { data: connections, isLoading: loadingConns } = useConnections();
@@ -38,7 +46,12 @@ export function QueryPage() {
     mutationFn: () =>
       queryApi.sqlOnly({ connection_id: connectionId!, question }),
     onSuccess: (data) => {
-      setSqlPreview({ sql: data.generated_sql, explanation: data.explanation });
+      setSqlPreview({
+        sql: data.generated_sql,
+        explanation: data.explanation,
+        confidence: data.confidence,
+        tables_used: data.tables_used,
+      });
       setEditedSql(data.generated_sql);
     },
   });
@@ -161,6 +174,30 @@ export function QueryPage() {
               }}
             />
           </div>
+          <Group mt="sm" gap="xl" align="flex-start">
+            <Stack gap={4}>
+              <Text size="xs" c="dimmed" fw={500}>CONFIDENCE</Text>
+              <Group gap="xs" align="center">
+                <Progress
+                  value={sqlPreview.confidence * 100}
+                  color={sqlPreview.confidence >= 0.8 ? 'green' : sqlPreview.confidence >= 0.5 ? 'yellow' : 'red'}
+                  size="sm"
+                  w={80}
+                />
+                <Text size="sm" fw={500}>{Math.round(sqlPreview.confidence * 100)}%</Text>
+              </Group>
+            </Stack>
+            {sqlPreview.tables_used.length > 0 && (
+              <Stack gap={4}>
+                <Text size="xs" c="dimmed" fw={500}>TABLES USED</Text>
+                <Group gap="xs">
+                  {sqlPreview.tables_used.map((t) => (
+                    <Badge key={t} variant="light" color="blue" size="sm">{t}</Badge>
+                  ))}
+                </Group>
+              </Stack>
+            )}
+          </Group>
           <Group justify="flex-end" mt="md">
             <Button
               variant="default"

@@ -12,12 +12,12 @@ import logging
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
-from app.db.models.schema_cache import CachedRelationship
+from app.db.models.schema_cache import CachedColumn, CachedRelationship, CachedTable
 from app.semantic.glossary_resolver import (
     ResolvedDictionary,
     ResolvedGlossary,
@@ -105,20 +105,24 @@ async def build_context(
         db, connection_id, question, question_embedding
     )
 
-    # Step 6: Get dictionary entries for all columns in selected tables
-    column_ids = []
-    for lt in tables:
-        for col in lt.columns:
-            column_ids.append(col.id)
-    dictionaries = await resolve_dictionary(db, column_ids)
-
     # Step 6: Find similar sample queries
     sample_queries = await find_similar_queries(
         db, connection_id, question_embedding
     )
 
-    # Step 7: Get relationships between selected tables
+    # Step 7: FK-neighbour expansion
+    # Pull in any lookup/dimension tables directly referenced by FK from the
+    # selected tables but not yet in context.  This fixes the root cause of
+    # the LLM guessing abbreviated column names (e.g. [Name] instead of
+    # [BusinessUnitName]) — the LLM can only use exact names if the neighbour
+    # table's column list is present in the prompt.
+    tables = await _expand_fk_neighbours(db, connection_id, tables, max_extra=5)
+
+    # Step 8: Get dictionary entries for all columns (including FK-expanded tables)
+    # and relationships between the final table set
     table_ids = [lt.table.id for lt in tables]
+    column_ids = [col.id for lt in tables for col in lt.columns]
+    dictionaries = await resolve_dictionary(db, column_ids)
     relationships = await _get_relationships_between(db, table_ids)
 
     # Step 9: Assemble prompt
@@ -174,3 +178,92 @@ async def _get_relationships_between(
             })
 
     return relationships
+
+
+async def _expand_fk_neighbours(
+    db: AsyncSession,
+    connection_id: uuid.UUID,
+    tables: list[LinkedTable],
+    max_extra: int = 5,
+) -> list[LinkedTable]:
+    """Expand context by pulling in FK-neighbour tables not yet selected.
+
+    For every table already in `tables`, find ALL FK relationships where it is
+    either the source or the target.  Load any referenced table that is not
+    already in context and append it as a LinkedTable with match_reason
+    "fk_neighbour".  This ensures lookup/dimension tables (e.g. BusinessUnit,
+    Designation, TechCategory) are always present so the LLM can read their
+    exact column names.
+
+    Args:
+        db: Async SQLAlchemy session.
+        connection_id: The connection whose schema is being queried.
+        tables: The tables already selected by find_relevant_tables.
+        max_extra: Cap on how many extra tables to add (prevents context explosion).
+
+    Returns:
+        Augmented list of LinkedTable (original tables + FK neighbours).
+    """
+    if not tables:
+        return tables
+
+    selected_ids = {lt.table.id for lt in tables}
+
+    # Find ALL FK edges touching any selected table (source OR target side)
+    rel_result = await db.execute(
+        select(CachedRelationship).where(
+            CachedRelationship.connection_id == connection_id,
+            or_(
+                CachedRelationship.source_table_id.in_(selected_ids),
+                CachedRelationship.target_table_id.in_(selected_ids),
+            ),
+        )
+    )
+    relationships = rel_result.scalars().all()
+
+    # Collect neighbour table IDs not already selected
+    neighbour_ids: list[uuid.UUID] = []
+    seen: set[uuid.UUID] = set()
+    for rel in relationships:
+        for candidate_id in (rel.source_table_id, rel.target_table_id):
+            if candidate_id not in selected_ids and candidate_id not in seen:
+                seen.add(candidate_id)
+                neighbour_ids.append(candidate_id)
+
+    if not neighbour_ids:
+        return tables
+
+    # Cap to avoid context explosion
+    neighbour_ids = neighbour_ids[:max_extra]
+
+    extra: list[LinkedTable] = []
+    for table_id in neighbour_ids:
+        cached_table = await db.get(CachedTable, table_id)
+        if not cached_table:
+            continue
+
+        col_result = await db.execute(
+            select(CachedColumn)
+            .where(CachedColumn.table_id == table_id)
+            .order_by(CachedColumn.ordinal_position)
+        )
+        columns = list(col_result.scalars().all())
+
+        extra.append(LinkedTable(
+            table=cached_table,
+            columns=columns,
+            score=0.1,
+            match_reason="fk_neighbour",
+        ))
+        logger.debug(
+            "FK-neighbour expansion: added table %s", cached_table.table_name
+        )
+
+    if extra:
+        logger.info(
+            "FK-neighbour expansion added %d table(s): %s",
+            len(extra),
+            [lt.table.table_name for lt in extra],
+        )
+
+    return tables + extra

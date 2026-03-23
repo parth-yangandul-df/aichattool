@@ -22,6 +22,14 @@ try:
 except ImportError:
     pass
 
+# Lazy-register SQL Server only when aioodbc is installed
+try:
+    from app.connectors.sqlserver.connector import SQLServerConnector
+
+    _CONNECTOR_CLASSES[ConnectorType.SQLSERVER] = SQLServerConnector
+except ImportError:
+    pass
+
 # Cache of active connector instances by connection ID
 _active_connectors: dict[str, BaseConnector] = {}
 

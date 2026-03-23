@@ -15,25 +15,28 @@ from app.services import connection_service
 router = APIRouter(prefix="/connections", tags=["connections"])
 
 
+def _to_response(c: object) -> ConnectionResponse:
+    """Convert a DatabaseConnection ORM object to a ConnectionResponse."""
+    return ConnectionResponse(
+        id=c.id,  # type: ignore[attr-defined]
+        name=c.name,  # type: ignore[attr-defined]
+        connector_type=c.connector_type,  # type: ignore[attr-defined]
+        default_schema=c.default_schema,  # type: ignore[attr-defined]
+        max_query_timeout_seconds=c.max_query_timeout_seconds,  # type: ignore[attr-defined]
+        max_rows=c.max_rows,  # type: ignore[attr-defined]
+        is_active=c.is_active,  # type: ignore[attr-defined]
+        has_connection_string=bool(c.connection_string_encrypted),  # type: ignore[attr-defined]
+        last_introspected_at=c.last_introspected_at,  # type: ignore[attr-defined]
+        created_at=c.created_at,  # type: ignore[attr-defined]
+        updated_at=c.updated_at,  # type: ignore[attr-defined]
+        allowed_table_names=c.allowed_table_names,  # type: ignore[attr-defined]
+    )
+
+
 @router.get("", response_model=list[ConnectionResponse])
 async def list_connections(db: AsyncSession = Depends(get_db)):
     connections = await connection_service.list_connections(db)
-    return [
-        ConnectionResponse(
-            id=c.id,
-            name=c.name,
-            connector_type=c.connector_type,
-            default_schema=c.default_schema,
-            max_query_timeout_seconds=c.max_query_timeout_seconds,
-            max_rows=c.max_rows,
-            is_active=c.is_active,
-            has_connection_string=bool(c.connection_string_encrypted),
-            last_introspected_at=c.last_introspected_at,
-            created_at=c.created_at,
-            updated_at=c.updated_at,
-        )
-        for c in connections
-    ]
+    return [_to_response(c) for c in connections]
 
 
 @router.post("", response_model=ConnectionResponse, status_code=201)
@@ -46,38 +49,16 @@ async def create_connection(body: ConnectionCreate, db: AsyncSession = Depends(g
         default_schema=body.default_schema,
         max_query_timeout_seconds=body.max_query_timeout_seconds,
         max_rows=body.max_rows,
+        allowed_table_names=body.allowed_table_names,
     )
-    return ConnectionResponse(
-        id=conn.id,
-        name=conn.name,
-        connector_type=conn.connector_type,
-        default_schema=conn.default_schema,
-        max_query_timeout_seconds=conn.max_query_timeout_seconds,
-        max_rows=conn.max_rows,
-        is_active=conn.is_active,
-        has_connection_string=True,
-        last_introspected_at=conn.last_introspected_at,
-        created_at=conn.created_at,
-        updated_at=conn.updated_at,
-    )
+    await db.refresh(conn)
+    return _to_response(conn)
 
 
 @router.get("/{connection_id}", response_model=ConnectionResponse)
 async def get_connection(connection_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     conn = await connection_service.get_connection(db, connection_id)
-    return ConnectionResponse(
-        id=conn.id,
-        name=conn.name,
-        connector_type=conn.connector_type,
-        default_schema=conn.default_schema,
-        max_query_timeout_seconds=conn.max_query_timeout_seconds,
-        max_rows=conn.max_rows,
-        is_active=conn.is_active,
-        has_connection_string=bool(conn.connection_string_encrypted),
-        last_introspected_at=conn.last_introspected_at,
-        created_at=conn.created_at,
-        updated_at=conn.updated_at,
-    )
+    return _to_response(conn)
 
 
 @router.put("/{connection_id}", response_model=ConnectionResponse)
@@ -89,19 +70,8 @@ async def update_connection(
     conn = await connection_service.update_connection(
         db, connection_id, **body.model_dump(exclude_none=True)
     )
-    return ConnectionResponse(
-        id=conn.id,
-        name=conn.name,
-        connector_type=conn.connector_type,
-        default_schema=conn.default_schema,
-        max_query_timeout_seconds=conn.max_query_timeout_seconds,
-        max_rows=conn.max_rows,
-        is_active=conn.is_active,
-        has_connection_string=bool(conn.connection_string_encrypted),
-        last_introspected_at=conn.last_introspected_at,
-        created_at=conn.created_at,
-        updated_at=conn.updated_at,
-    )
+    await db.refresh(conn)
+    return _to_response(conn)
 
 
 @router.delete("/{connection_id}", status_code=204)

@@ -17,8 +17,13 @@ class QueryComplexity(str, Enum):
 def _build_default_routes() -> dict[QueryComplexity, dict]:
     """Build default routing rules from settings."""
     provider = settings.default_llm_provider
-    # Use the Ollama-specific model name when provider is Ollama
-    model = settings.ollama_model if provider == "ollama" else settings.default_llm_model
+    # Use provider-specific model setting when available
+    if provider == "ollama":
+        model = settings.ollama_model
+    elif provider == "openrouter":
+        model = settings.openrouter_model
+    else:
+        model = settings.default_llm_model
     return {
         QueryComplexity.SIMPLE: {
             "provider": provider,

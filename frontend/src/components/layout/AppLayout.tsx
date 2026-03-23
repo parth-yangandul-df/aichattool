@@ -34,7 +34,7 @@ export function AppLayout() {
       <AppShell.Header>
         <Group h="100%" px="md">
           <Title order={3} fw={700}>
-            QueryWise
+            Saras
           </Title>
           <Text size="sm" c="dimmed">
             Ask questions in plain English

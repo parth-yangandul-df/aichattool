@@ -17,6 +17,14 @@ _BLOCKED_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bREVOKE\b", re.IGNORECASE), "REVOKE statements are not allowed"),
     (re.compile(r"\bCOPY\b", re.IGNORECASE), "COPY statements are not allowed"),
     (re.compile(r"\bEXECUTE\b", re.IGNORECASE), "EXECUTE statements are not allowed"),
+    # T-SQL (MS SQL Server) dangerous patterns
+    (re.compile(r"\bEXEC\b", re.IGNORECASE), "EXEC statements are not allowed"),
+    (re.compile(r"\bXP_CMDSHELL\b", re.IGNORECASE), "xp_cmdshell is not allowed"),
+    (re.compile(r"\bOPENROWSET\b", re.IGNORECASE), "OPENROWSET is not allowed"),
+    (re.compile(r"\bOPENQUERY\b", re.IGNORECASE), "OPENQUERY is not allowed"),
+    (re.compile(r"\bOPENDATASOURCE\b", re.IGNORECASE), "OPENDATASOURCE is not allowed"),
+    (re.compile(r"\bsp_executesql\b", re.IGNORECASE), "sp_executesql is not allowed"),
+    (re.compile(r"\bBULK\s+INSERT\b", re.IGNORECASE), "BULK INSERT is not allowed"),
     # Postgres-specific dangerous functions
     (re.compile(r"\bpg_sleep\b", re.IGNORECASE), "pg_sleep is not allowed"),
     (re.compile(r"\bpg_terminate_backend\b", re.IGNORECASE), "pg_terminate_backend is not allowed"),

@@ -1,8 +1,18 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+WORKSPACE_DIR = BACKEND_DIR.parent
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(WORKSPACE_DIR / ".env", BACKEND_DIR / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     # Application
     app_name: str = "QueryWise"
@@ -31,6 +41,17 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.1:8b"
     ollama_embedding_model: str = "nomic-embed-text"
+    # API key for cloud-hosted Ollama services (leave empty for local Ollama)
+    ollama_api_key: str = ""
+
+    # OpenRouter settings (used when default_llm_provider = "openrouter")
+    openrouter_api_key: str = ""
+    openrouter_model: str = "openai/gpt-3.5-turbo"
+
+    # Embedding provider override (leave empty to auto-derive from default_llm_provider)
+    # Set to "ollama" to use Ollama for embeddings while using a different provider for LLM.
+    # Valid values: "", "openai", "ollama", "anthropic"
+    embedding_provider: str = ""
 
     # Rate limiting
     max_queries_per_minute: int = 30

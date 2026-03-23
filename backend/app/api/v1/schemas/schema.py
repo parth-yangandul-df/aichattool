@@ -56,3 +56,13 @@ class IntrospectionResult(BaseModel):
     tables_found: int
     columns_found: int
     relationships_found: int
+
+
+class AvailableTableEntry(BaseModel):
+    """A single table entry returned by the available-tables endpoint.
+
+    Represents a dbo table that has passed auto-exclusion rules and is
+    eligible to be added to the connection's whitelist.
+    """
+    schema_name: str
+    table_name: str

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -22,6 +22,11 @@ class DatabaseConnection(Base):
     max_rows: Mapped[int] = mapped_column(Integer, default=1000)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_introspected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # SQL Server only: explicit whitelist of "schema.table" names to include during introspection.
+    # Null or empty list = no whitelist (all dbo tables, minus auto-excluded ones, are included).
+    allowed_table_names: Mapped[list[str] | None] = mapped_column(
+        JSONB, nullable=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

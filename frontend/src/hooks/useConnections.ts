@@ -75,6 +75,16 @@ export function useTableDetail(tableId: string | undefined) {
   });
 }
 
+/** SQL Server only: fetches all dbo tables eligible for whitelisting (does not update cache). */
+export function useAvailableTables(connectionId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ['available-tables', connectionId],
+    queryFn: () => connectionApi.availableTables(connectionId!),
+    enabled: !!connectionId && enabled,
+    staleTime: 30_000, // 30s — these don't change often
+  });
+}
+
 export function useActiveConnection() {
   // Simple local storage based active connection selection
   const stored = localStorage.getItem('activeConnectionId');
@@ -91,3 +101,4 @@ export function useActiveConnection() {
 
   return { activeConnectionId: activeId, setActive };
 }
+

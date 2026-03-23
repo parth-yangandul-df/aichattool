@@ -11,6 +11,8 @@ class ConnectionCreate(BaseModel):
     default_schema: str = Field(default="public", max_length=255)
     max_query_timeout_seconds: int = Field(default=30, ge=1, le=300)
     max_rows: int = Field(default=1000, ge=1, le=100000)
+    # SQL Server only: whitelist of exact "schema.table" names. Null/empty = include all.
+    allowed_table_names: list[str] | None = Field(default=None)
 
 
 class ConnectionUpdate(BaseModel):
@@ -20,6 +22,8 @@ class ConnectionUpdate(BaseModel):
     max_query_timeout_seconds: int | None = Field(default=None, ge=1, le=300)
     max_rows: int | None = Field(default=None, ge=1, le=100000)
     is_active: bool | None = None
+    # SQL Server only: update the table whitelist. Pass empty list to clear it.
+    allowed_table_names: list[str] | None = Field(default=None)
 
 
 class ConnectionResponse(BaseModel):
@@ -34,6 +38,7 @@ class ConnectionResponse(BaseModel):
     last_introspected_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    allowed_table_names: list[str] | None
 
     model_config = {"from_attributes": True}
 

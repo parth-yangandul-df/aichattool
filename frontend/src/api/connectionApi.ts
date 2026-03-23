@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { Connection, ConnectionCreate, IntrospectionResult, TableSummary, TableDetail } from '../types/api';
+import type { Connection, ConnectionCreate, IntrospectionResult, TableSummary, TableDetail, AvailableTable } from '../types/api';
 
 export const connectionApi = {
   list: () => api.get<Connection[]>('/connections').then(r => r.data),
@@ -11,4 +11,6 @@ export const connectionApi = {
   introspect: (id: string) => api.post<IntrospectionResult>(`/connections/${id}/introspect`).then(r => r.data),
   tables: (id: string) => api.get<TableSummary[]>(`/connections/${id}/tables`).then(r => r.data),
   tableDetail: (tableId: string) => api.get<TableDetail>(`/tables/${tableId}`).then(r => r.data),
+  /** SQL Server only: lists all dbo tables (after auto-exclusion) from the live DB. Does not update cache. */
+  availableTables: (id: string) => api.get<AvailableTable[]>(`/connections/${id}/available-tables`).then(r => r.data),
 };
